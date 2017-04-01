@@ -14,7 +14,9 @@ namespace MemorySnapshotPool
 
     private readonly int myBytesPerSnapshot;
 
+    // todo: can inline this into pool array, as the begginning
     private readonly byte[] mySnapshotArray;
+    private int mySnapshotHash;
 
     private int myLastUsedHandle;
 
@@ -167,26 +169,33 @@ namespace MemorySnapshotPool
         destinationIndex: 0,
         length: myBytesPerSnapshot);
 
+      mySnapshotHash = myHandleToHash[snapshot];
+
       return mySnapshotArray;
     }
 
-    [MustUseReturnValue]
-    public SnapshotHandle SetSharedSnapshotArray()
+    public void SetSharedSnapshotElement(int elementIndex, byte valueToSet)
     {
-      var poolArray = myPoolArray;
-      var newHash = 0;
+      var existingValue = mySnapshotArray[elementIndex];
 
-      for (var index = 0; index < poolArray.Length; index++)
-      {
-        newHash ^= HashPart(poolArray[index], index);
-      }
+      var hashWithoutElement = mySnapshotHash ^ HashPart(existingValue, elementIndex);
+      mySnapshotHash = hashWithoutElement ^ HashPart(valueToSet, elementIndex);
+
+      mySnapshotArray[elementIndex] = valueToSet;
+    }
+
+    [MustUseReturnValue]
+    public SnapshotHandle SetModifiedSharedSnapshotArray()
+    {
+      var snapshotArray = mySnapshotArray;
+      var snapshotHash = mySnapshotHash;
 
       IReadOnlyCollection<SnapshotHandle> candidates;
-      if (myHashToHandle.TryGetValue(newHash, out candidates))
+      if (myHashToHandle.TryGetValue(snapshotHash, out candidates))
       {
         foreach (var candidate in candidates)
         {
-          if (StructuralEquals(poolArray, 0, candidate))
+          if (StructuralEquals(snapshotArray, 0, candidate))
           {
             return candidate; // already in pool
           }
@@ -198,14 +207,54 @@ namespace MemorySnapshotPool
       int newShift;
       var newArray = GetArray(newHandle, out newShift);
       Array.Copy(
-        sourceArray: poolArray,
+        sourceArray: snapshotArray,
         sourceIndex: 0,
         destinationArray: newArray,
         destinationIndex: newShift,
         length: myBytesPerSnapshot);
 
-      myHashToHandle.Add(newHash, newHandle);
-      myHandleToHash.Add(newHandle, newHash);
+      myHashToHandle.Add(snapshotHash, newHandle);
+      myHandleToHash.Add(newHandle, snapshotHash);
+
+      return newHandle;
+    }
+
+    [MustUseReturnValue]
+    public SnapshotHandle SetWholeSharedSnapshotArray()
+    {
+      var snapshotArray = mySnapshotArray;
+      var snapshotHash = 0;
+
+      for (var index = 0; index < snapshotArray.Length; index++)
+      {
+        snapshotHash ^= HashPart(snapshotArray[index], index);
+      }
+
+      IReadOnlyCollection<SnapshotHandle> candidates;
+      if (myHashToHandle.TryGetValue(snapshotHash, out candidates))
+      {
+        foreach (var candidate in candidates)
+        {
+          if (StructuralEquals(snapshotArray, 0, candidate))
+          {
+            return candidate; // already in pool
+          }
+        }
+      }
+
+      var newHandle = AllocNewHandle();
+
+      int newShift;
+      var newArray = GetArray(newHandle, out newShift);
+      Array.Copy(
+        sourceArray: snapshotArray,
+        sourceIndex: 0,
+        destinationArray: newArray,
+        destinationIndex: newShift,
+        length: myBytesPerSnapshot);
+
+      myHashToHandle.Add(snapshotHash, newHandle);
+      myHandleToHash.Add(newHandle, snapshotHash);
 
       return newHandle;
     }
