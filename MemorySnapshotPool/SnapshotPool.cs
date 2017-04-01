@@ -5,33 +5,39 @@ using JetBrains.Annotations;
 
 namespace MemorySnapshotPool
 {
-  public class SpanshotPool
+  public class SnapshotPool
   {
     // todo: chunked array or pointers + pinned array
+    // todo: migrate to uint32, expose byte and bitvector APIs
 
     private byte[] myPoolArray;
-    private readonly byte[] mySecondArray;
 
-    private readonly int myElementPerSnapshot;
+    private readonly int myBytesPerSnapshot;
 
     private readonly byte[] mySnapshotArray;
 
-    private int myLastUsedHandle = 1;
+    private int myLastUsedHandle;
 
     // todo: can store inline in array
-    private readonly Dictionary<SnapshotHandle, int> myHandleToHash = new Dictionary<SnapshotHandle, int>();
+    private readonly Dictionary<SnapshotHandle, int> myHandleToHash;
 
     // todo: can replace with inlined hashtable impl
-    private readonly MultiValueDictionary<int, SnapshotHandle> myHashToHandle = new MultiValueDictionary<int, SnapshotHandle>();
+    private readonly MultiValueDictionary<int, SnapshotHandle> myHashToHandle;
 
-    public SpanshotPool(int elementPerSnapshot)
+    public SnapshotPool(int bytesPerSnapshot)
     {
-      myPoolArray = new byte[elementPerSnapshot * 100];
-      mySnapshotArray = new byte[elementPerSnapshot];
-      myElementPerSnapshot = elementPerSnapshot;
+      Debug.Assert(bytesPerSnapshot >= 0);
+
+      myPoolArray = new byte[bytesPerSnapshot * 100];
+      mySnapshotArray = new byte[bytesPerSnapshot];
+      myBytesPerSnapshot = bytesPerSnapshot;
+
+      myLastUsedHandle = 1;
+      myHandleToHash = new Dictionary<SnapshotHandle, int> {{ZeroSnapshot, 0}};
+      myHashToHandle = new MultiValueDictionary<int, SnapshotHandle> {{0, ZeroSnapshot}};
     }
 
-    public SnapshotHandle Initial
+    public SnapshotHandle ZeroSnapshot
     {
       get { return new SnapshotHandle(0); }
     }
@@ -39,15 +45,15 @@ namespace MemorySnapshotPool
     [Pure, NotNull]
     private byte[] GetArray(SnapshotHandle snapshot, out int shift)
     {
-      shift = snapshot.Handle * myElementPerSnapshot;
+      shift = snapshot.Handle * myBytesPerSnapshot;
       return myPoolArray;
     }
 
     [Pure]
     public byte GetElementValue(SnapshotHandle snapshot, int elementIndex)
     {
-      Debug.Assert(elementIndex > 0);
-      Debug.Assert(elementIndex <= myElementPerSnapshot);
+      Debug.Assert(elementIndex >= 0);
+      Debug.Assert(elementIndex < myBytesPerSnapshot);
 
       int shift;
       var array = GetArray(snapshot, out shift);
@@ -68,8 +74,8 @@ namespace MemorySnapshotPool
     [MustUseReturnValue]
     public SnapshotHandle SetElementValue(SnapshotHandle snapshot, int elementIndex, byte valueToSet)
     {
-      Debug.Assert(elementIndex > 0);
-      Debug.Assert(elementIndex <= myElementPerSnapshot);
+      Debug.Assert(elementIndex >= 0);
+      Debug.Assert(elementIndex < myBytesPerSnapshot);
 
       int sourceShift;
       var sourceArray = GetArray(snapshot, out sourceShift);
@@ -85,11 +91,15 @@ namespace MemorySnapshotPool
       var hashWithoutElement = currentHash ^ HashPart(existingValue, elementIndex);
       var newHash = hashWithoutElement ^ HashPart(valueToSet, elementIndex);
 
-      foreach (var candidate in myHashToHandle[newHash])
+      IReadOnlyCollection<SnapshotHandle> candidates;
+      if (myHashToHandle.TryGetValue(newHash, out candidates))
       {
-        if (StructuralEqualsWithChange(sourceArray, sourceShift, candidate, valueToSet, elementIndex))
+        foreach (var candidate in candidates)
         {
-          return candidate; // already in pool
+          if (StructuralEqualsWithChange(sourceArray, sourceShift, candidate, valueToSet, elementIndex))
+          {
+            return candidate; // already in pool
+          }
         }
       }
 
@@ -102,9 +112,9 @@ namespace MemorySnapshotPool
         sourceIndex: sourceShift,
         destinationArray: newArray,
         destinationIndex: newShift,
-        length: myElementPerSnapshot);
+        length: myBytesPerSnapshot);
 
-      newArray[elementIndex] = valueToSet;
+      newArray[newShift + elementIndex] = valueToSet;
 
       myHashToHandle.Add(newHash, newHandle);
       myHandleToHash.Add(newHandle, newHash);
@@ -115,7 +125,7 @@ namespace MemorySnapshotPool
     [MustUseReturnValue]
     private SnapshotHandle AllocNewHandle()
     {
-      var lastIndex = (myLastUsedHandle + 1) * myElementPerSnapshot;
+      var lastIndex = (myLastUsedHandle + 1) * myBytesPerSnapshot;
       if (lastIndex > myPoolArray.Length)
       {
         Array.Resize(ref myPoolArray, myPoolArray.Length * 2);
@@ -134,9 +144,9 @@ namespace MemorySnapshotPool
         if (sourceArray[sourceShift + index] != candidateArray[candidateShift + index]) return false;
       }
 
-      if (candidateArray[elementIndex] != valueToSet) return false;
+      if (candidateArray[candidateShift + elementIndex] != valueToSet) return false;
 
-      for (var index = elementIndex + 1; index < myElementPerSnapshot; index++)
+      for (var index = elementIndex + 1; index < myBytesPerSnapshot; index++)
       {
         if (sourceArray[sourceShift + index] != candidateArray[candidateShift + index]) return false;
       }
@@ -145,7 +155,7 @@ namespace MemorySnapshotPool
     }
 
     [NotNull, MustUseReturnValue]
-    public byte[] ReadSharedSnapshotArray(SnapshotHandle snapshot)
+    public byte[] ReadToSharedSnapshotArray(SnapshotHandle snapshot)
     {
       int sourceShift;
       var sourceArray = GetArray(snapshot, out sourceShift);
@@ -155,7 +165,7 @@ namespace MemorySnapshotPool
         sourceIndex: sourceShift,
         destinationArray: mySnapshotArray,
         destinationIndex: 0,
-        length: myElementPerSnapshot);
+        length: myBytesPerSnapshot);
 
       return mySnapshotArray;
     }
@@ -171,11 +181,15 @@ namespace MemorySnapshotPool
         newHash ^= HashPart(poolArray[index], index);
       }
 
-      foreach (var candidate in myHashToHandle[newHash])
+      IReadOnlyCollection<SnapshotHandle> candidates;
+      if (myHashToHandle.TryGetValue(newHash, out candidates))
       {
-        if (StructuralEquals(poolArray, 0, candidate))
+        foreach (var candidate in candidates)
         {
-          return candidate; // already in pool
+          if (StructuralEquals(poolArray, 0, candidate))
+          {
+            return candidate; // already in pool
+          }
         }
       }
 
@@ -188,7 +202,7 @@ namespace MemorySnapshotPool
         sourceIndex: 0,
         destinationArray: newArray,
         destinationIndex: newShift,
-        length: myElementPerSnapshot);
+        length: myBytesPerSnapshot);
 
       myHashToHandle.Add(newHash, newHandle);
       myHandleToHash.Add(newHandle, newHash);
@@ -201,7 +215,7 @@ namespace MemorySnapshotPool
       int candidateShift;
       var candidateArray = GetArray(candidate, out candidateShift);
 
-      for (var index = 0; index < myElementPerSnapshot; index++)
+      for (var index = 0; index < myBytesPerSnapshot; index++)
       {
         if (sourceArray[sourceShift + index] != candidateArray[candidateShift + index]) return false;
       }
@@ -219,6 +233,16 @@ namespace MemorySnapshotPool
       Handle = handle;
     }
 
+    public static bool operator ==(SnapshotHandle left, SnapshotHandle right)
+    {
+      return left.Equals(right);
+    }
+
+    public static bool operator !=(SnapshotHandle left, SnapshotHandle right)
+    {
+      return !left.Equals(right);
+    }
+
     public bool Equals(SnapshotHandle other)
     {
       return Handle == other.Handle;
@@ -232,6 +256,11 @@ namespace MemorySnapshotPool
     public override int GetHashCode()
     {
       return Handle;
+    }
+
+    public override string ToString()
+    {
+      return Handle.ToString();
     }
   }
 }
