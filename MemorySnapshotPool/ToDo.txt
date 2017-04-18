@@ -1,5 +1,4 @@
 ﻿SnapshotPool
-* Migrate to 'uint' elements
 * Store snapshot hash inline
 * Parametrize with "storage system"
   * Managed array implementation

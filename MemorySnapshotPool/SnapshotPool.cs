@@ -10,12 +10,13 @@ namespace MemorySnapshotPool
     // todo: chunked array or pointers + pinned array
     // todo: migrate to uint32, expose byte and bitvector APIs
 
-    private byte[] myPoolArray;
+    private uint[] myPoolArray;
 
-    private readonly int myBytesPerSnapshot;
+    private readonly int myBytesPerSnapshot; // todo: get rid of?
+    private readonly int myElementsPerSnapshot;
 
     // todo: can inline this into pool array, as the begginning
-    private readonly byte[] mySharedSnapshotArray;
+    private readonly uint[] mySharedSnapshotArray;
     private int mySharedSnapshotHash;
 
     private int myLastUsedHandle;
@@ -30,9 +31,10 @@ namespace MemorySnapshotPool
       Debug.Assert(bytesPerSnapshot >= 0);
 
 
-      myPoolArray = new byte[bytesPerSnapshot * 100];
-      mySharedSnapshotArray = new byte[bytesPerSnapshot];
+      myPoolArray = new uint[bytesPerSnapshot * 100];
+      mySharedSnapshotArray = new uint[bytesPerSnapshot];
       myBytesPerSnapshot = bytesPerSnapshot;
+      myElementsPerSnapshot = (bytesPerSnapshot / sizeof(uint)) + 1;
 
       myLastUsedHandle = 1;
       myHandleToHash = new Dictionary<SnapshotHandle, int> {{ZeroSnapshot, 0}};
@@ -58,14 +60,14 @@ namespace MemorySnapshotPool
     }
 
     [Pure, NotNull]
-    private byte[] GetArray(SnapshotHandle snapshot, out int shift)
+    private uint[] GetArray(SnapshotHandle snapshot, out int shift)
     {
       shift = snapshot.Handle * myBytesPerSnapshot;
       return myPoolArray;
     }
 
     [Pure]
-    public byte GetElementValue(SnapshotHandle snapshot, int elementIndex)
+    public uint GetElementValue(SnapshotHandle snapshot, int elementIndex)
     {
       Debug.Assert(elementIndex >= 0);
       Debug.Assert(elementIndex < myBytesPerSnapshot);
@@ -76,14 +78,14 @@ namespace MemorySnapshotPool
     }
 
     [Pure]
-    private static int HashPart(byte value, int elementIndex)
+    private static int HashPart(uint value, int elementIndex)
     {
       var shiftAmount = (elementIndex * 2) % 32;
 
       var a = value << shiftAmount;
       var b = value >> (32 - shiftAmount);
 
-      return a | b;
+      return (int) (a | b);
     }
 
     [MustUseReturnValue]
@@ -106,8 +108,10 @@ namespace MemorySnapshotPool
       var hashWithoutElement = currentHash ^ HashPart(existingValue, elementIndex);
       var newHash = hashWithoutElement ^ HashPart(valueToSet, elementIndex);
 
+      var withOneValueChanged = new ExistingPoolSnapshotWithOneValueChangedExternalKey(
+        this, newHash, sourceArray, sourceShift, valueToSet, elementIndex);
+
       SnapshotHandle existingHandle;
-      var withOneValueChanged = new ExistingPoolSnapshotWithOneValueChangedExternalKey(this, newHash, sourceArray, sourceShift, valueToSet, elementIndex);
       if (myExistingSnapshots.TryGetKey(withOneValueChanged, out existingHandle))
       {
         return existingHandle;
@@ -148,12 +152,13 @@ namespace MemorySnapshotPool
     {
       [NotNull] private readonly SnapshotPool myPool;
       private readonly int myNewHash;
-      private readonly byte[] mySourceArray;
+      private readonly uint[] mySourceArray;
       private readonly int mySourceShift;
-      private readonly byte myValueToSet;
+      private readonly uint myValueToSet;
       private readonly int myElementIndex;
 
-      public ExistingPoolSnapshotWithOneValueChangedExternalKey(SnapshotPool pool, int newHash, byte[] sourceArray, int sourceShift, byte valueToSet, int elementIndex)
+      public ExistingPoolSnapshotWithOneValueChangedExternalKey(
+        SnapshotPool pool, int newHash, uint[] sourceArray, int sourceShift, uint valueToSet, int elementIndex)
       {
         myPool = pool;
         myNewHash = newHash;
@@ -229,7 +234,7 @@ namespace MemorySnapshotPool
     }
 
     [NotNull, MustUseReturnValue]
-    public byte[] ReadToSharedSnapshotArray(SnapshotHandle snapshot)
+    public uint[] ReadToSharedSnapshotArray(SnapshotHandle snapshot)
     {
       int sourceShift;
       var sourceArray = GetArray(snapshot, out sourceShift);
@@ -353,14 +358,4 @@ namespace MemorySnapshotPool
       return newExternalKey.Handle;
     }
   }
-
-  //public class ByteSnapshotPool : SnapshotPool
-  //{
-    
-  //}
-
-  //public class Int32SnapshotPool : SnapshotPool
-  //{
-    
-  //}
 }
