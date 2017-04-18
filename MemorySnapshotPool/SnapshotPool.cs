@@ -15,8 +15,8 @@ namespace MemorySnapshotPool
     private readonly int myBytesPerSnapshot;
 
     // todo: can inline this into pool array, as the begginning
-    private readonly byte[] mySnapshotArray;
-    private int mySnapshotHash;
+    private readonly byte[] mySharedSnapshotArray;
+    private int mySharedSnapshotHash;
 
     private int myLastUsedHandle;
 
@@ -24,7 +24,8 @@ namespace MemorySnapshotPool
     private readonly Dictionary<SnapshotHandle, int> myHandleToHash;
 
     // todo: can replace with inlined hashtable impl
-    private readonly MultiValueDictionary<int, SnapshotHandle> myHashToHandle;
+    //private readonly MultiValueDictionary<int, SnapshotHandle> myExistingSnapshots;
+    private ExternalKeysHashSet<SnapshotHandle> myExistingSnapshots;
 
     public SnapshotPool(int bytesPerSnapshot)
     {
@@ -32,12 +33,25 @@ namespace MemorySnapshotPool
 
 
       myPoolArray = new byte[bytesPerSnapshot * 100];
-      mySnapshotArray = new byte[bytesPerSnapshot];
+      mySharedSnapshotArray = new byte[bytesPerSnapshot];
       myBytesPerSnapshot = bytesPerSnapshot;
 
       myLastUsedHandle = 1;
       myHandleToHash = new Dictionary<SnapshotHandle, int> {{ZeroSnapshot, 0}};
-      myHashToHandle = new MultiValueDictionary<int, SnapshotHandle> {{0, ZeroSnapshot}};
+      myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>();
+      myExistingSnapshots.Add(new ZeroSnapshotExternalKey());
+    }
+
+    private struct ZeroSnapshotExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExteralKey
+    {
+      public SnapshotHandle Handle { get { return new SnapshotHandle(0); } }
+
+      public bool Equals(SnapshotHandle keyHandle)
+      {
+        throw new InvalidOperationException();
+      }
+
+      public override int GetHashCode() { return 0; }
     }
 
     public SnapshotHandle ZeroSnapshot
@@ -94,35 +108,114 @@ namespace MemorySnapshotPool
       var hashWithoutElement = currentHash ^ HashPart(existingValue, elementIndex);
       var newHash = hashWithoutElement ^ HashPart(valueToSet, elementIndex);
 
-      IReadOnlyCollection<SnapshotHandle> candidates;
-      if (myHashToHandle.TryGetValue(newHash, out candidates))
+      SnapshotHandle existingHandle;
+      var withOneValueChanged = new PoolExternalKeyWithOneValueChanged(this, newHash, sourceArray, sourceShift, valueToSet, elementIndex);
+      if (myExistingSnapshots.TryGetKey(withOneValueChanged, out existingHandle))
       {
-        foreach (var candidate in candidates)
-        {
-          if (StructuralEqualsWithChange(sourceArray, sourceShift, candidate, valueToSet, elementIndex))
-          {
-            return candidate; // already in pool
-          }
-        }
+        return existingHandle;
       }
 
-      var newHandle = AllocNewHandle();
+      var newExternalKey = withOneValueChanged.AllocateChanged();
+      myExistingSnapshots.Add(newExternalKey);
 
-      int newShift;
-      var newArray = GetArray(newHandle, out newShift);
-      Array.Copy(
-        sourceArray: sourceArray,
-        sourceIndex: sourceShift,
-        destinationArray: newArray,
-        destinationIndex: newShift,
-        length: myBytesPerSnapshot);
+      return newExternalKey.Handle;
+    }
 
-      newArray[newShift + elementIndex] = valueToSet;
+    private struct ExistingPoolExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExteralKey
+    {
+      [NotNull] private readonly SnapshotPool myPool;
+      private readonly SnapshotHandle myHandle;
 
-      myHashToHandle.Add(newHash, newHandle);
-      myHandleToHash.Add(newHandle, newHash);
+      public ExistingPoolExternalKey([NotNull] SnapshotPool pool, SnapshotHandle handle)
+      {
+        myHandle = handle;
+        myPool = pool;
+      }
 
-      return newHandle;
+      public SnapshotHandle Handle { get { return myHandle; } }
+
+      public bool Equals(SnapshotHandle keyHandle)
+      {
+        return keyHandle == myHandle;
+      }
+
+      public override int GetHashCode()
+      {
+        // todo: store inline in array
+        return myPool.myHandleToHash[myHandle];
+      }
+    }
+
+    private struct PoolExternalKeyWithOneValueChanged : ExternalKeysHashSet<SnapshotHandle>.IExteralKey
+    {
+      [NotNull] private readonly SnapshotPool myPool;
+      private readonly int myNewHash;
+      private readonly byte[] mySourceArray;
+      private readonly int mySourceShift;
+      private readonly byte myValueToSet;
+      private readonly int myElementIndex;
+
+      public PoolExternalKeyWithOneValueChanged(SnapshotPool pool, int newHash, byte[] sourceArray, int sourceShift, byte valueToSet, int elementIndex)
+      {
+        myPool = pool;
+        myNewHash = newHash;
+        mySourceArray = sourceArray;
+        mySourceShift = sourceShift;
+        myValueToSet = valueToSet;
+        myElementIndex = elementIndex;
+      }
+
+      public SnapshotHandle Handle
+      {
+        get { throw new InvalidOperationException("Not yet has a handle"); }
+      }
+
+      public bool Equals(SnapshotHandle candidateHandle)
+      {
+        int candidateShift;
+        var candidateArray = myPool.GetArray(candidateHandle, out candidateShift);
+
+        for (var index = 0; index < myElementIndex; index++)
+        {
+          if (mySourceArray[mySourceShift + index] != candidateArray[candidateShift + index]) return false;
+        }
+
+        if (candidateArray[candidateShift + myElementIndex] != myValueToSet) return false;
+
+        for (var index = myElementIndex + 1; index < myPool.myBytesPerSnapshot; index++)
+        {
+          if (mySourceArray[mySourceShift + index] != candidateArray[candidateShift + index]) return false;
+        }
+
+        return true;
+      }
+
+      public override int GetHashCode()
+      {
+        return myNewHash;
+      }
+
+      [MustUseReturnValue]
+      public ExistingPoolExternalKey AllocateChanged()
+      {
+        var newHandle = myPool.AllocNewHandle();
+
+        int newShift;
+        var newArray = myPool.GetArray(newHandle, out newShift);
+        Array.Copy(
+          sourceArray: mySourceArray,
+          sourceIndex: mySourceShift,
+          destinationArray: newArray,
+          destinationIndex: newShift,
+          length: myPool.myBytesPerSnapshot);
+
+        newArray[newShift + myElementIndex] = myValueToSet;
+
+        // todo: store inline
+        myPool.myHandleToHash.Add(newHandle, myNewHash);
+
+        return new ExistingPoolExternalKey(myPool, newHandle);
+      }
     }
 
     [MustUseReturnValue]
@@ -137,26 +230,6 @@ namespace MemorySnapshotPool
       return new SnapshotHandle(myLastUsedHandle++);
     }
 
-    private bool StructuralEqualsWithChange([NotNull] byte[] sourceArray, int sourceShift, SnapshotHandle candidate, byte valueToSet, int elementIndex)
-    {
-      int candidateShift;
-      var candidateArray = GetArray(candidate, out candidateShift);
-
-      for (var index = 0; index < elementIndex; index++)
-      {
-        if (sourceArray[sourceShift + index] != candidateArray[candidateShift + index]) return false;
-      }
-
-      if (candidateArray[candidateShift + elementIndex] != valueToSet) return false;
-
-      for (var index = elementIndex + 1; index < myBytesPerSnapshot; index++)
-      {
-        if (sourceArray[sourceShift + index] != candidateArray[candidateShift + index]) return false;
-      }
-
-      return true;
-    }
-
     [NotNull, MustUseReturnValue]
     public byte[] ReadToSharedSnapshotArray(SnapshotHandle snapshot)
     {
@@ -166,111 +239,120 @@ namespace MemorySnapshotPool
       Array.Copy(
         sourceArray: sourceArray,
         sourceIndex: sourceShift,
-        destinationArray: mySnapshotArray,
+        destinationArray: mySharedSnapshotArray,
         destinationIndex: 0,
         length: myBytesPerSnapshot);
 
-      mySnapshotHash = myHandleToHash[snapshot];
+      mySharedSnapshotHash = myHandleToHash[snapshot];
 
-      return mySnapshotArray;
+      return mySharedSnapshotArray;
     }
 
     public void SetSharedSnapshotElement(int elementIndex, byte valueToSet)
     {
-      var existingValue = mySnapshotArray[elementIndex];
+      var existingValue = mySharedSnapshotArray[elementIndex];
 
-      var hashWithoutElement = mySnapshotHash ^ HashPart(existingValue, elementIndex);
-      mySnapshotHash = hashWithoutElement ^ HashPart(valueToSet, elementIndex);
+      var hashWithoutElement = mySharedSnapshotHash ^ HashPart(existingValue, elementIndex);
+      mySharedSnapshotHash = hashWithoutElement ^ HashPart(valueToSet, elementIndex);
 
-      mySnapshotArray[elementIndex] = valueToSet;
+      mySharedSnapshotArray[elementIndex] = valueToSet;
     }
 
     [MustUseReturnValue]
     public SnapshotHandle SetModifiedSharedSnapshotArray()
     {
-      var snapshotArray = mySnapshotArray;
-      var snapshotHash = mySnapshotHash;
+      SnapshotHandle existingHandle;
+      var sharedArrayExternalKey = new SharedArrayExternalKey(this, mySharedSnapshotHash);
 
-      IReadOnlyCollection<SnapshotHandle> candidates;
-      if (myHashToHandle.TryGetValue(snapshotHash, out candidates))
+      if (myExistingSnapshots.TryGetKey(sharedArrayExternalKey, out existingHandle))
       {
-        foreach (var candidate in candidates)
-        {
-          if (StructuralEquals(snapshotArray, 0, candidate))
-          {
-            return candidate; // already in pool
-          }
-        }
+        return existingHandle;
       }
 
-      var newHandle = AllocNewHandle();
+      var newExternalKey = sharedArrayExternalKey.AllocateChanged();
+      myExistingSnapshots.Add(newExternalKey);
 
-      int newShift;
-      var newArray = GetArray(newHandle, out newShift);
-      Array.Copy(
-        sourceArray: snapshotArray,
-        sourceIndex: 0,
-        destinationArray: newArray,
-        destinationIndex: newShift,
-        length: myBytesPerSnapshot);
+      return newExternalKey.Handle;
+    }
 
-      myHashToHandle.Add(snapshotHash, newHandle);
-      myHandleToHash.Add(newHandle, snapshotHash);
+    private struct SharedArrayExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExteralKey
+    {
+      private readonly SnapshotPool myPool;
+      private readonly int mySharedSnapshotHash;
 
-      return newHandle;
+      public SharedArrayExternalKey(SnapshotPool pool, int sharedSnapshotHash)
+      {
+        myPool = pool;
+        mySharedSnapshotHash = sharedSnapshotHash;
+      }
+
+      public SnapshotHandle Handle
+      {
+        get { throw new InvalidOperationException("Not yet has a handle"); }
+      }
+
+      public bool Equals(SnapshotHandle keyHandle)
+      {
+        int candidateShift;
+        var candidateArray = myPool.GetArray(keyHandle, out candidateShift);
+
+        for (var index = 0; index < myPool.myBytesPerSnapshot; index++)
+        {
+          if (myPool.mySharedSnapshotArray[index] != candidateArray[candidateShift + index]) return false;
+        }
+
+        return true;
+      }
+
+      public override int GetHashCode()
+      {
+        return mySharedSnapshotHash;
+      }
+
+      [MustUseReturnValue]
+      public ExistingPoolExternalKey AllocateChanged()
+      {
+        var newHandle = myPool.AllocNewHandle();
+
+        int newShift;
+        var newArray = myPool.GetArray(newHandle, out newShift);
+        Array.Copy(
+          sourceArray: myPool.mySharedSnapshotArray,
+          sourceIndex: 0,
+          destinationArray: newArray,
+          destinationIndex: newShift,
+          length: myPool.myBytesPerSnapshot);
+
+        // todo: store inline
+        myPool.myHandleToHash.Add(newHandle, mySharedSnapshotHash);
+
+        return new ExistingPoolExternalKey(myPool, newHandle);
+      }
     }
 
     [MustUseReturnValue]
     public SnapshotHandle SetWholeSharedSnapshotArray()
     {
-      var snapshotArray = mySnapshotArray;
-      var snapshotHash = 0;
+      var snapshotArray = mySharedSnapshotArray;
+      var computedHash = 0;
 
       for (var index = 0; index < snapshotArray.Length; index++)
       {
-        snapshotHash ^= HashPart(snapshotArray[index], index);
+        computedHash ^= HashPart(snapshotArray[index], index);
       }
 
-      IReadOnlyCollection<SnapshotHandle> candidates;
-      if (myHashToHandle.TryGetValue(snapshotHash, out candidates))
+      SnapshotHandle existingHandle;
+      var sharedArrayExternalKey = new SharedArrayExternalKey(this, computedHash);
+
+      if (myExistingSnapshots.TryGetKey(sharedArrayExternalKey, out existingHandle))
       {
-        foreach (var candidate in candidates)
-        {
-          if (StructuralEquals(snapshotArray, 0, candidate))
-          {
-            return candidate; // already in pool
-          }
-        }
+        return existingHandle;
       }
 
-      var newHandle = AllocNewHandle();
+      var newExternalKey = sharedArrayExternalKey.AllocateChanged();
+      myExistingSnapshots.Add(newExternalKey);
 
-      int newShift;
-      var newArray = GetArray(newHandle, out newShift);
-      Array.Copy(
-        sourceArray: snapshotArray,
-        sourceIndex: 0,
-        destinationArray: newArray,
-        destinationIndex: newShift,
-        length: myBytesPerSnapshot);
-
-      myHashToHandle.Add(snapshotHash, newHandle);
-      myHandleToHash.Add(newHandle, snapshotHash);
-
-      return newHandle;
-    }
-
-    private bool StructuralEquals([NotNull] byte[] sourceArray, int sourceShift, SnapshotHandle candidate)
-    {
-      int candidateShift;
-      var candidateArray = GetArray(candidate, out candidateShift);
-
-      for (var index = 0; index < myBytesPerSnapshot; index++)
-      {
-        if (sourceArray[sourceShift + index] != candidateArray[candidateShift + index]) return false;
-      }
-
-      return true;
+      return newExternalKey.Handle;
     }
   }
 
