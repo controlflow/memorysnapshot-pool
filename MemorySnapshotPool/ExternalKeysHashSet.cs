@@ -76,7 +76,7 @@ namespace MemorySnapshotPool
     {
       if (myBuckets != null)
       {
-        var hashCode = externalKey.GetHashCode() & 0x7FFFFFFF;
+        var hashCode = externalKey.HashCode() & 0x7FFFFFFF;
 
         for (var index = myBuckets[hashCode % myBuckets.Length]; index >= 0; index = myEntries[index].Next)
         {
@@ -108,7 +108,7 @@ namespace MemorySnapshotPool
       if (myBuckets == null) Initialize(0);
 
       var buckets = myBuckets;
-      var hashCode = externalKey.GetHashCode() & 0x7FFFFFFF;
+      var hashCode = externalKey.HashCode() & 0x7FFFFFFF;
       var targetBucket = hashCode % buckets.Length;
 
       for (var index = buckets[targetBucket]; index >= 0; index = myEntries[index].Next)
