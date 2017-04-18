@@ -75,7 +75,7 @@ namespace MemorySnapshotPool
         return EqualityComparer<T>.Default.Equals(myArray[keyHandle], myArray[myIndex]);
       }
 
-      public override int GetHashCode()
+      public int HashCode()
       {
         return myArray[myIndex].GetHashCode();
       }
@@ -109,7 +109,7 @@ namespace MemorySnapshotPool
         return EqualityComparer<T>.Default.Equals(myArray[keyHandle], myArray[myIndex]);
       }
 
-      public override int GetHashCode() { return 42; }
+      public int HashCode() { return 42; }
     }
   }
 }

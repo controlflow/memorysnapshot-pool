@@ -51,7 +51,7 @@ namespace MemorySnapshotPool
         throw new InvalidOperationException();
       }
 
-      public override int GetHashCode() { return 0; }
+      public int HashCode() { return 0; }
     }
 
     public SnapshotHandle ZeroSnapshot
@@ -139,7 +139,7 @@ namespace MemorySnapshotPool
         return keyHandle == myHandle;
       }
 
-      public override int GetHashCode()
+      public int HashCode()
       {
         // todo: store inline in array
         return myPool.myHandleToHash[myHandle];
@@ -190,7 +190,7 @@ namespace MemorySnapshotPool
         return true;
       }
 
-      public override int GetHashCode()
+      public int HashCode()
       {
         return myNewHash;
       }
@@ -304,7 +304,7 @@ namespace MemorySnapshotPool
         return true;
       }
 
-      public override int GetHashCode()
+      public int HashCode()
       {
         return mySharedSnapshotHash;
       }
