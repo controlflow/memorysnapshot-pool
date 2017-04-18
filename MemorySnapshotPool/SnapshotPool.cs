@@ -23,8 +23,6 @@ namespace MemorySnapshotPool
     // todo: can store inline in array
     private readonly Dictionary<SnapshotHandle, int> myHandleToHash;
 
-    // todo: can replace with inlined hashtable impl
-    //private readonly MultiValueDictionary<int, SnapshotHandle> myExistingSnapshots;
     private ExternalKeysHashSet<SnapshotHandle> myExistingSnapshots;
 
     public SnapshotPool(int bytesPerSnapshot)
@@ -109,7 +107,7 @@ namespace MemorySnapshotPool
       var newHash = hashWithoutElement ^ HashPart(valueToSet, elementIndex);
 
       SnapshotHandle existingHandle;
-      var withOneValueChanged = new PoolExternalKeyWithOneValueChanged(this, newHash, sourceArray, sourceShift, valueToSet, elementIndex);
+      var withOneValueChanged = new ExistingPoolSnapshotWithOneValueChangedExternalKey(this, newHash, sourceArray, sourceShift, valueToSet, elementIndex);
       if (myExistingSnapshots.TryGetKey(withOneValueChanged, out existingHandle))
       {
         return existingHandle;
@@ -121,12 +119,12 @@ namespace MemorySnapshotPool
       return newExternalKey.Handle;
     }
 
-    private struct ExistingPoolExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExteralKey
+    private struct ExistingPoolSnapshotExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExteralKey
     {
       [NotNull] private readonly SnapshotPool myPool;
       private readonly SnapshotHandle myHandle;
 
-      public ExistingPoolExternalKey([NotNull] SnapshotPool pool, SnapshotHandle handle)
+      public ExistingPoolSnapshotExternalKey([NotNull] SnapshotPool pool, SnapshotHandle handle)
       {
         myHandle = handle;
         myPool = pool;
@@ -146,7 +144,7 @@ namespace MemorySnapshotPool
       }
     }
 
-    private struct PoolExternalKeyWithOneValueChanged : ExternalKeysHashSet<SnapshotHandle>.IExteralKey
+    private struct ExistingPoolSnapshotWithOneValueChangedExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExteralKey
     {
       [NotNull] private readonly SnapshotPool myPool;
       private readonly int myNewHash;
@@ -155,7 +153,7 @@ namespace MemorySnapshotPool
       private readonly byte myValueToSet;
       private readonly int myElementIndex;
 
-      public PoolExternalKeyWithOneValueChanged(SnapshotPool pool, int newHash, byte[] sourceArray, int sourceShift, byte valueToSet, int elementIndex)
+      public ExistingPoolSnapshotWithOneValueChangedExternalKey(SnapshotPool pool, int newHash, byte[] sourceArray, int sourceShift, byte valueToSet, int elementIndex)
       {
         myPool = pool;
         myNewHash = newHash;
@@ -196,7 +194,7 @@ namespace MemorySnapshotPool
       }
 
       [MustUseReturnValue]
-      public ExistingPoolExternalKey AllocateChanged()
+      public ExistingPoolSnapshotExternalKey AllocateChanged()
       {
         var newHandle = myPool.AllocNewHandle();
 
@@ -214,7 +212,7 @@ namespace MemorySnapshotPool
         // todo: store inline
         myPool.myHandleToHash.Add(newHandle, myNewHash);
 
-        return new ExistingPoolExternalKey(myPool, newHandle);
+        return new ExistingPoolSnapshotExternalKey(myPool, newHandle);
       }
     }
 
@@ -310,7 +308,7 @@ namespace MemorySnapshotPool
       }
 
       [MustUseReturnValue]
-      public ExistingPoolExternalKey AllocateChanged()
+      public ExistingPoolSnapshotExternalKey AllocateChanged()
       {
         var newHandle = myPool.AllocNewHandle();
 
@@ -326,7 +324,7 @@ namespace MemorySnapshotPool
         // todo: store inline
         myPool.myHandleToHash.Add(newHandle, mySharedSnapshotHash);
 
-        return new ExistingPoolExternalKey(myPool, newHandle);
+        return new ExistingPoolSnapshotExternalKey(myPool, newHandle);
       }
     }
 
