@@ -13,7 +13,7 @@ namespace MemorySnapshotPool
     {
       myIntsPerSnapshot = intsPerSnapshot;
       myPoolArray = new uint[intsPerSnapshot * 100];
-      myLastUsedHandle = 1;
+      myLastUsedHandle = 2; // shared + zero
     }
 
     public int MemoryConsumptionTotalInBytes

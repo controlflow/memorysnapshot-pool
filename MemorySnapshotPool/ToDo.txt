@@ -5,6 +5,5 @@
   * Unmanaged array implementation
     * How to resize?
   * Migrate to unsafe for both impls
-* Get rid of separate shared array + external key impl? Store as 0s/1s snapshot
 * Introduce byte/bitvector APIs for snapshots
 * Validate zero-width SnapshotPool
