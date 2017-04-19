@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using JetBrains.Annotations;
 
@@ -10,9 +9,6 @@ namespace MemorySnapshotPool
     private readonly int myBytesPerSnapshot;
     private readonly int myIntsPerSnapshot;
     private readonly int myIntsPerSnapshotWithoutHash;
-
-    // todo: can store inline in array
-    private readonly Dictionary<SnapshotHandle, int> myHandleToHash;
 
     private ExternalKeysHashSet<SnapshotHandle> myExistingSnapshots;
 
@@ -35,14 +31,13 @@ namespace MemorySnapshotPool
       mySharedSnapshotArray = new uint[myIntsPerSnapshotWithoutHash];
       myLastUsedHandle = 1;
 
-      myHandleToHash = new Dictionary<SnapshotHandle, int> {{ZeroSnapshot, 0}};
       myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>();
       myExistingSnapshots.Add(ZeroSnapshot, new ZeroSnapshotExternalKey());
     }
 
     public int MemoryConsumptionPerSnapshotInBytes
     {
-      get { return myIntsPerSnapshot / sizeof(uint); }
+      get { return myBytesPerSnapshot; }
     }
 
     public int MemoryConsumptionTotalInBytes
@@ -116,7 +111,7 @@ namespace MemorySnapshotPool
         return snapshot; // the same value
       }
 
-      var currentHash = myHandleToHash[snapshot];
+      var currentHash = (int) sourceArray[sourceShift + myIntsPerSnapshotWithoutHash];
 
       var hashWithoutElement = currentHash ^ HashPart(existingValue, elementIndex);
       var newHash = hashWithoutElement ^ HashPart(valueToSet, elementIndex);
@@ -151,8 +146,10 @@ namespace MemorySnapshotPool
 
       public int HashCode()
       {
-        // todo: store inline in array
-        return myPool.myHandleToHash[myHandle];
+        int shift;
+        var array = myPool.GetArray(myHandle, out shift);
+
+        return (int) array[shift + myPool.myIntsPerSnapshotWithoutHash];
       }
     }
 
@@ -188,7 +185,7 @@ namespace MemorySnapshotPool
 
         if (candidateArray[candidateShift + myElementIndex] != myValueToSet) return false;
 
-        for (var index = myElementIndex + 1; index < myPool.myIntsPerSnapshot; index++)
+        for (var index = myElementIndex + 1; index < myPool.myIntsPerSnapshotWithoutHash; index++)
         {
           if (mySourceArray[mySourceShift + index] != candidateArray[candidateShift + index]) return false;
         }
@@ -216,9 +213,8 @@ namespace MemorySnapshotPool
           length: myPool.myIntsPerSnapshotWithoutHash);
 
         newArray[newShift + myElementIndex] = myValueToSet;
+        newArray[newShift + myPool.myIntsPerSnapshotWithoutHash] = (uint) myNewHash;
 
-        // todo: store inline
-        myPool.myHandleToHash.Add(newHandle, myNewHash);
         myPool.myExistingSnapshots.Add(newHandle, new ExistingPoolSnapshotExternalKey(myPool, newHandle));
 
         return newHandle;
@@ -250,7 +246,7 @@ namespace MemorySnapshotPool
         destinationIndex: 0,
         length: myIntsPerSnapshotWithoutHash);
 
-      mySharedSnapshotHash = myHandleToHash[snapshot];
+      mySharedSnapshotHash = (int) sourceArray[sourceShift + myIntsPerSnapshotWithoutHash];
 
       return mySharedSnapshotArray;
     }
@@ -322,8 +318,8 @@ namespace MemorySnapshotPool
           destinationIndex: newShift,
           length: myPool.myIntsPerSnapshotWithoutHash);
 
-        // todo: store inline
-        myPool.myHandleToHash.Add(newHandle, mySharedSnapshotHash);
+        newArray[newShift + myPool.myIntsPerSnapshotWithoutHash] = (uint) mySharedSnapshotHash;
+
         myPool.myExistingSnapshots.Add(newHandle, new ExistingPoolSnapshotExternalKey(myPool, newHandle));
 
         return newHandle;
