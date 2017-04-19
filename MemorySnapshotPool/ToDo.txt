@@ -1,6 +1,4 @@
 ﻿SnapshotPool
-* Store snapshot hash inline
-* Abstract data store + operations
 * Parametrize with "storage system"
   * Managed array implementation
     * LOH protection?

@@ -6,30 +6,29 @@ namespace MemorySnapshotPool
 {
   public class SnapshotPool
   {
-    private readonly int myBytesPerSnapshot;
     private readonly int myIntsPerSnapshot;
     private readonly int myIntsPerSnapshotWithoutHash;
 
     private ExternalKeysHashSet<SnapshotHandle> myExistingSnapshots;
+    private ManagedSnapshotStorage myStorage;
 
-    // storage system:
-    private uint[] myPoolArray;
+    // shared array
     private readonly uint[] mySharedSnapshotArray;
     private int mySharedSnapshotHash;
-    private int myLastUsedHandle;
 
     public SnapshotPool(int bytesPerSnapshot)
     {
       Debug.Assert(bytesPerSnapshot >= 0, "bytesPerSnapshot >= 0");
 
-      myBytesPerSnapshot = sizeof(int) + bytesPerSnapshot;
-      myIntsPerSnapshot = (myBytesPerSnapshot / sizeof(uint)) + (myBytesPerSnapshot % sizeof(uint) == 0 ? 0 : 1);
+      var snapshotSize = sizeof(int) + bytesPerSnapshot;
+      myIntsPerSnapshot = (snapshotSize / sizeof(uint)) + (snapshotSize % sizeof(uint) == 0 ? 0 : 1);
       myIntsPerSnapshotWithoutHash = myIntsPerSnapshot - 1;
 
       // storage system:
-      myPoolArray = new uint[myIntsPerSnapshot * 100];
+      myStorage = new ManagedSnapshotStorage(myIntsPerSnapshot);
+
+      // todo: get rid of
       mySharedSnapshotArray = new uint[myIntsPerSnapshotWithoutHash];
-      myLastUsedHandle = 1;
 
       myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>();
       myExistingSnapshots.Add(ZeroSnapshot, new ZeroSnapshotExternalKey());
@@ -37,12 +36,14 @@ namespace MemorySnapshotPool
 
     public int MemoryConsumptionPerSnapshotInBytes
     {
-      get { return myBytesPerSnapshot; }
+      // todo: ExternalKeysHashSet
+      get { return myIntsPerSnapshot / sizeof(uint); }
     }
 
     public int MemoryConsumptionTotalInBytes
     {
-      get { return myPoolArray.Length * sizeof(uint); }
+      // todo: ExternalKeysHashSet
+      get { return myStorage.MemoryConsumptionTotalInBytes; }
     }
 
     // todo: snapshots count
@@ -68,8 +69,7 @@ namespace MemorySnapshotPool
     [Pure, NotNull]
     private uint[] GetArray(SnapshotHandle snapshot, out int shift)
     {
-      shift = snapshot.Handle * myIntsPerSnapshot;
-      return myPoolArray;
+      return myStorage.GetArray(snapshot, out shift);
     }
 
     #endregion
@@ -201,7 +201,7 @@ namespace MemorySnapshotPool
       [MustUseReturnValue]
       public SnapshotHandle AllocateChanged()
       {
-        var newHandle = myPool.AllocNewHandle();
+        var newHandle = myPool.myStorage.AllocNewHandle();
 
         int newShift;
         var newArray = myPool.GetArray(newHandle, out newShift);
@@ -219,18 +219,6 @@ namespace MemorySnapshotPool
 
         return newHandle;
       }
-    }
-
-    [MustUseReturnValue]
-    private SnapshotHandle AllocNewHandle()
-    {
-      var lastIndex = (myLastUsedHandle + 1) * myIntsPerSnapshot;
-      if (lastIndex > myPoolArray.Length)
-      {
-        Array.Resize(ref myPoolArray, myPoolArray.Length * 2);
-      }
-
-      return new SnapshotHandle(myLastUsedHandle++);
     }
 
     [NotNull, MustUseReturnValue]
@@ -307,7 +295,7 @@ namespace MemorySnapshotPool
       [MustUseReturnValue]
       public SnapshotHandle AllocateChanged()
       {
-        var newHandle = myPool.AllocNewHandle();
+        var newHandle = myPool.myStorage.AllocNewHandle();
 
         int newShift;
         var newArray = myPool.GetArray(newHandle, out newShift);
@@ -346,6 +334,44 @@ namespace MemorySnapshotPool
       }
 
       return sharedArrayExternalKey.AllocateChanged();
+    }
+  }
+
+  public struct ManagedSnapshotStorage
+  {
+    private readonly int myIntsPerSnapshot;
+    private uint[] myPoolArray;
+    private int myLastUsedHandle;
+
+    public ManagedSnapshotStorage(int intsPerSnapshot)
+    {
+      myIntsPerSnapshot = intsPerSnapshot;
+      myPoolArray = new uint[intsPerSnapshot * 100];
+      myLastUsedHandle = 1;
+    }
+
+    public int MemoryConsumptionTotalInBytes
+    {
+      get { return myPoolArray.Length * sizeof(uint); }
+    }
+
+    [Pure]
+    public uint[] GetArray(SnapshotHandle snapshot, out int shift)
+    {
+      shift = snapshot.Handle * myIntsPerSnapshot;
+      return myPoolArray;
+    }
+
+    [MustUseReturnValue]
+    public SnapshotHandle AllocNewHandle()
+    {
+      var lastIndex = (myLastUsedHandle + 1) * myIntsPerSnapshot;
+      if (lastIndex > myPoolArray.Length)
+      {
+        Array.Resize(ref myPoolArray, myPoolArray.Length * 2);
+      }
+
+      return new SnapshotHandle(myLastUsedHandle++);
     }
   }
 }
