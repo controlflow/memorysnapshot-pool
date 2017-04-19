@@ -69,9 +69,9 @@ namespace MemorySnapshotPool.Tests
         myIndex = index;
       }
 
-      public bool Equals(int keyHandle)
+      public bool Equals(int candidateHandle)
       {
-        return EqualityComparer<T>.Default.Equals(myArray[keyHandle], myArray[myIndex]);
+        return EqualityComparer<T>.Default.Equals(myArray[candidateHandle], myArray[myIndex]);
       }
 
       public int HashCode()
@@ -101,9 +101,9 @@ namespace MemorySnapshotPool.Tests
         myIndex = index;
       }
 
-      public bool Equals(int keyHandle)
+      public bool Equals(int candidateHandle)
       {
-        return EqualityComparer<T>.Default.Equals(myArray[keyHandle], myArray[myIndex]);
+        return EqualityComparer<T>.Default.Equals(myArray[candidateHandle], myArray[myIndex]);
       }
 
       public int HashCode() { return 42; }

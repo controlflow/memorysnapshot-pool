@@ -11,9 +11,9 @@ namespace MemorySnapshotPool.Tests
     public void ZeroModifications()
     {
       var snapshotPool = new SnapshotPool(bytesPerSnapshot: 10 * sizeof(uint));
-      var zeroSnapshot = snapshotPool.ZeroSnapshot;
+      var zeroSnapshot = SnapshotPool.ZeroSnapshot;
 
-      var zeroArray = snapshotPool.ReadToSharedSnapshotArray(zeroSnapshot);
+      var zeroArray = snapshotPool.SharedSnapshotToArray(zeroSnapshot);
       Assert.That(zeroArray, Is.All.Zero);
       Assert.AreEqual(zeroArray.Length, ElementsPerSnapshot);
 
@@ -33,21 +33,21 @@ namespace MemorySnapshotPool.Tests
     public void ZeroBytes()
     {
       var snapshotPool = new SnapshotPool(bytesPerSnapshot: 0);
-      var zeroSnapshot = snapshotPool.ZeroSnapshot;
+      var zeroSnapshot = SnapshotPool.ZeroSnapshot;
 
-      Assert.That(snapshotPool.ReadToSharedSnapshotArray(zeroSnapshot), Is.Empty);
+      Assert.That(snapshotPool.SharedSnapshotToArray(zeroSnapshot), Is.Empty);
     }
 
     [Test]
     public void Intern()
     {
       var snapshotPool = new SnapshotPool(bytesPerSnapshot: 10 * sizeof(uint));
-      var zeroSnapshot = snapshotPool.ZeroSnapshot;
+      var zeroSnapshot = SnapshotPool.ZeroSnapshot;
 
       var modifiedSnapshot = snapshotPool.SetUInt32(zeroSnapshot, elementIndex: 5, valueToSet: 42);
       Assert.AreNotEqual(zeroSnapshot, modifiedSnapshot);
 
-      var modifiedArray = snapshotPool.ReadToSharedSnapshotArray(modifiedSnapshot);
+      var modifiedArray = snapshotPool.SharedSnapshotToArray(modifiedSnapshot);
       Assert.AreEqual(modifiedArray[5], 42);
 
       var modifiedSnapshot2 = snapshotPool.SetUInt32(zeroSnapshot, elementIndex: 5, valueToSet: 42);

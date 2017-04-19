@@ -48,6 +48,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ExternalKeysHashSet.cs" />
+    <Compile Include="ManagedSnapshotStorage.cs" />
     <Compile Include="Tests\ExternalKeysHashSetTests.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

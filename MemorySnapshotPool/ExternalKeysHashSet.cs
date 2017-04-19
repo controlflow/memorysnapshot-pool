@@ -177,7 +177,7 @@ namespace MemorySnapshotPool
       myEntries = newEntries;
     }
 
-    [Pure, ContractAnnotation("=> false, keyHandle: null; => true")]
+    [Pure]
     public bool TryGetKey<TExternalKey>(TExternalKey externalKey, out TKeyHandle keyHandle)
       where TExternalKey : struct, IExteralKey
     {
@@ -259,7 +259,7 @@ namespace MemorySnapshotPool
 
     public interface IExteralKey
     {
-      [Pure] bool Equals(TKeyHandle keyHandle);
+      [Pure] bool Equals(TKeyHandle candidateHandle);
       [Pure] int HashCode();
     }
   }
