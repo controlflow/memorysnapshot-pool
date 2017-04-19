@@ -32,10 +32,10 @@ namespace MemorySnapshotPool
       get { return myCount - myFreeCount; }
     }
 
-    public bool Add<TExteralKey>(TExteralKey externalKey)
+    public bool Add<TExteralKey>(TKeyHandle keyHandle, TExteralKey externalKey)
       where TExteralKey : struct, IExteralKey
     {
-      return Insert(externalKey);
+      return Insert(keyHandle, externalKey);
     }
 
     public void Clear()
@@ -102,7 +102,7 @@ namespace MemorySnapshotPool
       myFreeList = -1;
     }
 
-    private bool Insert<TExternalKey>(TExternalKey externalKey)
+    private bool Insert<TExternalKey>(TKeyHandle keyHandle, TExternalKey externalKey)
       where TExternalKey : struct, IExteralKey
     {
       if (myBuckets == null) Initialize(0);
@@ -140,7 +140,7 @@ namespace MemorySnapshotPool
 
       myEntries[freeIndex].HashCode = hashCode;
       myEntries[freeIndex].Next = buckets[targetBucket];
-      myEntries[freeIndex].KeyHandle = externalKey.Handle;
+      myEntries[freeIndex].KeyHandle = keyHandle;
       buckets[targetBucket] = freeIndex;
       return true;
     }
@@ -259,7 +259,6 @@ namespace MemorySnapshotPool
 
     public interface IExteralKey
     {
-      TKeyHandle Handle { get; }
       [Pure] bool Equals(TKeyHandle keyHandle);
       [Pure] int HashCode();
     }

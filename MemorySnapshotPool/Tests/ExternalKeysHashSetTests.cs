@@ -2,7 +2,7 @@
 using JetBrains.Annotations;
 using NUnit.Framework;
 
-namespace MemorySnapshotPool
+namespace MemorySnapshotPool.Tests
 {
   [TestFixture]
   public class ExternalKeysHashSetTests
@@ -23,7 +23,7 @@ namespace MemorySnapshotPool
       var hashSet = new ExternalKeysHashSet<int>(capacity: 0);
       Assert.AreEqual(0, hashSet.Count);
 
-      Assert.IsTrue(hashSet.Add(firstKey));
+      Assert.IsTrue(hashSet.Add(0, firstKey));
       Assert.AreEqual(1, hashSet.Count);
 
       {
@@ -31,14 +31,15 @@ namespace MemorySnapshotPool
 
         int existingHandle;
         Assert.IsTrue(hashSet.TryGetKey(firstKey, out existingHandle));
-        Assert.AreEqual(firstKey.Handle, existingHandle);
+        Assert.AreEqual(0, existingHandle);
       }
 
-      hashSet.Add(firstKey);
-      Assert.IsFalse(hashSet.Add(firstKey));
+      hashSet.Add(0, firstKey);
+
+      Assert.IsFalse(hashSet.Add(0, firstKey));
       Assert.AreEqual(1, hashSet.Count);
 
-      Assert.IsTrue(hashSet.Add(secondKey));
+      Assert.IsTrue(hashSet.Add(1, secondKey));
       Assert.AreEqual(2, hashSet.Count);
 
       {
@@ -47,10 +48,10 @@ namespace MemorySnapshotPool
 
         int existingHandle;
         Assert.IsTrue(hashSet.TryGetKey(firstKey, out existingHandle));
-        Assert.AreEqual(firstKey.Handle, existingHandle);
+        Assert.AreEqual(0, existingHandle);
 
         Assert.IsTrue(hashSet.TryGetKey(secondKey, out existingHandle));
-        Assert.AreEqual(secondKey.Handle, existingHandle);
+        Assert.AreEqual(1, existingHandle);
       }
 
       hashSet.Clear();
@@ -67,8 +68,6 @@ namespace MemorySnapshotPool
         myArray = array;
         myIndex = index;
       }
-
-      public int Handle { get { return myIndex; } }
 
       public bool Equals(int keyHandle)
       {
@@ -101,8 +100,6 @@ namespace MemorySnapshotPool
         myArray = array;
         myIndex = index;
       }
-
-      public int Handle { get { return myIndex; } }
 
       public bool Equals(int keyHandle)
       {
