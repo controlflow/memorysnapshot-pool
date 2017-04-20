@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using JetBrains.Annotations;
 using NUnit.Framework;
 
 namespace MemorySnapshotPool.Tests
@@ -33,13 +35,13 @@ namespace MemorySnapshotPool.Tests
 
       snapshotPool.CopyToSharedSnapshot(zeroSnapshot);
 
-      var modifiedHandle3 = snapshotPool.SetSharedSnapshot();
+      var modifiedHandle3 = snapshotPool.StoreSharedSnapshot();
       Assert.AreEqual(zeroSnapshot, modifiedHandle3);
 
       snapshotPool.SetSharedSnapshotUint32(1, valueToSet: 0);
       snapshotPool.SetSharedSnapshotUint32(3, valueToSet: 0);
 
-      var modifiedHandle4 = snapshotPool.SetSharedSnapshot();
+      var modifiedHandle4 = snapshotPool.StoreSharedSnapshot();
       Assert.AreEqual(zeroSnapshot, modifiedHandle4);
     }
 
@@ -73,12 +75,12 @@ namespace MemorySnapshotPool.Tests
       snapshotPool.CopyToSharedSnapshot(zeroSnapshot);
       snapshotPool.SetSharedSnapshotUint32(elementIndex: 5, valueToSet: 42);
 
-      var modifiedSnapshot4 = snapshotPool.SetSharedSnapshot();
+      var modifiedSnapshot4 = snapshotPool.StoreSharedSnapshot();
       Assert.AreEqual(modifiedSnapshot, modifiedSnapshot4);
     }
 
     [Test]
-    public void PoolResize()
+    public void PoolAllocationlessResize()
     {
       var rows = (
           from a in Enumerable.Range(0, 10)
@@ -88,36 +90,23 @@ namespace MemorySnapshotPool.Tests
           select new[] {(uint) a, (uint) b, (uint) c, (uint) d}
         ).ToList();
 
-      var snapshotPool = new SnapshotPool(4 * sizeof(uint));
-      var handles = new HashSet<SnapshotHandle>();
-      var xs = new Dictionary<SnapshotHandle, uint[]>();
+      var snapshotPool = new SnapshotPool(bytesPerSnapshot: 4 * sizeof(uint), capacity: rows.Count);
+      var handles = CreateHashSetWithCapacity(rows.Count);
 
-      SnapshotHandle aaaa;
+      var totalMemoryBefore = GC.GetTotalMemory(false);
 
       foreach (var row in rows)
       {
         for (var index = 0; index < row.Length; index++)
-        {
           snapshotPool.SetSharedSnapshotUint32(index, row[index]);
-        }
 
-        
-
-        var arr = snapshotPool.SnapshotToDebugArray(SnapshotPool.SharedSnapshot);
-        if (arr.SequenceEqual(new uint[] {8, 4, 1, 9}))
-        {
-          //aaaa = modifiedSnapshot;
-          GC.KeepAlive(this);
-        }
-
-        var modifiedSnapshot = snapshotPool.SetSharedSnapshot();
-        Assert.IsTrue(handles.Add(modifiedSnapshot));
-
-        xs.Add(modifiedSnapshot, arr);
+        var modifiedSnapshot = snapshotPool.StoreSharedSnapshot();
+        AllocationlessAssert(handles.Add(modifiedSnapshot));
       }
 
-
-      Assert.That(rows.Count, Is.EqualTo(handles.Count));
+      var totalMemoryAfter = GC.GetTotalMemory(false);
+      AllocationlessAssert(totalMemoryBefore == totalMemoryAfter);
+      AllocationlessAssert(rows.Count == handles.Count);
 
       var snapshot = SnapshotPool.ZeroSnapshot;
 
@@ -125,27 +114,32 @@ namespace MemorySnapshotPool.Tests
       {
         for (var index = 0; index < row.Length; index++)
         {
-          var snapshot1 = snapshotPool.SetSingleUInt32(snapshot, index, row[index]);
-
-          
-
-          if (!handles.Contains(snapshot1))
-          {
-            var a = snapshotPool.SnapshotToDebugArray(snapshot);
-            var b = snapshotPool.SnapshotToDebugArray(snapshot1);
-
-            GC.KeepAlive(this);
-            Assert.Fail();
-          }
-
-
-          snapshot = snapshot1;
+          snapshot = snapshotPool.SetSingleUInt32(snapshot, index, row[index]);
+          AllocationlessAssert(handles.Contains(snapshot));
         }
       }
 
-      GC.KeepAlive(this);
+      var totalMemoryAfter2 = GC.GetTotalMemory(false);
+      AllocationlessAssert(totalMemoryBefore == totalMemoryAfter2);
+    }
 
-      //Assert.AreEqual(xs.Count(), 42);
+    [SuppressMessage("ReSharper", "UnusedParameter.Local")]
+    private static void AllocationlessAssert(bool condition)
+    {
+      if (!condition)
+        throw new AssertionException("Condition is 'false'");
+    }
+
+    [NotNull]
+    private static HashSet<SnapshotHandle> CreateHashSetWithCapacity(int capacity)
+    {
+      var handles = new HashSet<SnapshotHandle>();
+
+      for (var index = 0; index < capacity; index++)
+        handles.Add(new SnapshotHandle(index));
+
+      handles.Clear();
+      return handles;
     }
   }
 }

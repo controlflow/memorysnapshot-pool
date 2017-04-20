@@ -4,9 +4,7 @@ using JetBrains.Annotations;
 
 namespace MemorySnapshotPool
 {
-  // todo: expose the amount of hash collisions
-
-  public class ExternalKeysHashSet<TKeyHandle>
+  public struct ExternalKeysHashSet<TKeyHandle>
   {
     private struct Entry
     {
@@ -22,8 +20,7 @@ namespace MemorySnapshotPool
     private int myFreeList;
     private int myFreeCount;
 
-    // note: avoid creating with default ctor
-    public ExternalKeysHashSet(int capacity) //: this()
+    public ExternalKeysHashSet(int capacity) : this()
     {
       if (capacity > 0)
       {
@@ -116,12 +113,11 @@ namespace MemorySnapshotPool
     {
       if (myBuckets == null) Initialize(0);
 
-      var buckets = myBuckets;
       var hashCode = externalKey.HashCode() & 0x7FFFFFFF;
-      var targetBucket = hashCode % buckets.Length;
+      var targetBucket = hashCode % myBuckets.Length;
       var hashCollision = false;
 
-      for (var index = buckets[targetBucket]; index >= 0; index = myEntries[index].Next)
+      for (var index = myBuckets[targetBucket]; index >= 0; index = myEntries[index].Next)
       {
         if (myEntries[index].HashCode != hashCode) continue;
 
@@ -144,7 +140,7 @@ namespace MemorySnapshotPool
         if (myCount == myEntries.Length)
         {
           Resize();
-          targetBucket = hashCode % buckets.Length;
+          targetBucket = hashCode % myBuckets.Length;
         }
 
         freeIndex = myCount;
@@ -152,9 +148,9 @@ namespace MemorySnapshotPool
       }
 
       myEntries[freeIndex].HashCode = hashCode;
-      myEntries[freeIndex].Next = buckets[targetBucket];
+      myEntries[freeIndex].Next = myBuckets[targetBucket];
       myEntries[freeIndex].KeyHandle = keyHandle;
-      buckets[targetBucket] = freeIndex;
+      myBuckets[targetBucket] = freeIndex;
       return true;
     }
 

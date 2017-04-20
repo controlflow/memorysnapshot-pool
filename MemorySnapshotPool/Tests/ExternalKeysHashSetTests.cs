@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 using JetBrains.Annotations;
 using NUnit.Framework;
 
@@ -107,6 +108,32 @@ namespace MemorySnapshotPool.Tests
       }
 
       public int HashCode() { return 42; }
+    }
+
+    [Test]
+    public void Resize()
+    {
+      var chars = Enumerable.Range('a', 'z' - 'a').Select(i => (char) i).ToList();
+      var permutations =
+        from a in chars
+        from b in chars
+        from c in chars
+        select a.ToString() + b + c;
+
+      var array = permutations.ToArray();
+      var hashSet = new ExternalKeysHashSet<int>(capacity: 0);
+
+      for (var handle = 0; handle < array.Length; handle++)
+      {
+        hashSet.Add(handle, new ArrayElementExternalKey<string>(array, handle));
+      }
+
+      Assert.That(hashSet.Count, Is.EqualTo(array.Length));
+
+      for (var handle = 0; handle < array.Length; handle++)
+      {
+        Assert.That(hashSet.Contains(new ArrayElementExternalKey<string>(array, handle)));
+      }
     }
   }
 }

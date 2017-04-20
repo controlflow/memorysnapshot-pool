@@ -10,10 +10,10 @@ namespace MemorySnapshotPool
     private readonly int myIntsPerSnapshotWithoutHash;
 
     private ExternalKeysHashSet<SnapshotHandle> myExistingSnapshots;
-    private ManagedSnapshotStorage myStorage;
-    //private UnmanagedSnapshotStorage myStorage;
+    //private ManagedSnapshotStorage myStorage;
+    private UnmanagedSnapshotStorage myStorage;
 
-    public SnapshotPool(int bytesPerSnapshot)
+    public SnapshotPool(int bytesPerSnapshot, int capacity = 100)
     {
       Debug.Assert(bytesPerSnapshot >= 0, "bytesPerSnapshot >= 0");
 
@@ -21,10 +21,10 @@ namespace MemorySnapshotPool
       myIntsPerSnapshot = (snapshotSize / sizeof(uint)) + (snapshotSize % sizeof(uint) == 0 ? 0 : 1);
       myIntsPerSnapshotWithoutHash = myIntsPerSnapshot - 1;
 
-      //myStorage = new UnmanagedSnapshotStorage(myIntsPerSnapshot, capacity: 100);
-      myStorage = new ManagedSnapshotStorage(myIntsPerSnapshot, capacity: 100);
+      myStorage = new UnmanagedSnapshotStorage(myIntsPerSnapshot, capacity + 2);
+      //myStorage = new ManagedSnapshotStorage(myIntsPerSnapshot, capacity + 2);
 
-      myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>(capacity: 100);
+      myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>(capacity + 1);
       myExistingSnapshots.Add(ZeroSnapshot, new ZeroSnapshotExternalKey());
     }
 
@@ -213,7 +213,7 @@ namespace MemorySnapshotPool
     }
 
     [MustUseReturnValue]
-    public SnapshotHandle SetSharedSnapshot()
+    public SnapshotHandle StoreSharedSnapshot()
     {
       SnapshotHandle existingHandle;
       var sharedArrayExternalKey = new SharedSnapshotExternalKey(this);
