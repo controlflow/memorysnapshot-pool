@@ -11,6 +11,7 @@ namespace MemorySnapshotPool
 
     private ExternalKeysHashSet<SnapshotHandle> myExistingSnapshots;
     private ManagedSnapshotStorage myStorage;
+    //private UnmanagedSnapshotStorage myStorage;
 
     public SnapshotPool(int bytesPerSnapshot)
     {
@@ -20,9 +21,10 @@ namespace MemorySnapshotPool
       myIntsPerSnapshot = (snapshotSize / sizeof(uint)) + (snapshotSize % sizeof(uint) == 0 ? 0 : 1);
       myIntsPerSnapshotWithoutHash = myIntsPerSnapshot - 1;
 
-      myStorage = new ManagedSnapshotStorage(myIntsPerSnapshot);
+      //myStorage = new UnmanagedSnapshotStorage(myIntsPerSnapshot, capacity: 100);
+      myStorage = new ManagedSnapshotStorage(myIntsPerSnapshot, capacity: 100);
 
-      myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>();
+      myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>(capacity: 100);
       myExistingSnapshots.Add(ZeroSnapshot, new ZeroSnapshotExternalKey());
     }
 
@@ -51,18 +53,8 @@ namespace MemorySnapshotPool
       public int HashCode() { return 0; }
     }
 
-    private static readonly SnapshotHandle SharedSnapshot = new SnapshotHandle(0);
+    public static readonly SnapshotHandle SharedSnapshot = new SnapshotHandle(0);
     public static readonly SnapshotHandle ZeroSnapshot = new SnapshotHandle(1);
-
-    #region Storage
-
-    [Pure, NotNull, Obsolete]
-    private uint[] GetArray(SnapshotHandle snapshot, out int shift)
-    {
-      return myStorage.GetArray(snapshot, out shift);
-    }
-
-    #endregion
 
     [Pure]
     public uint GetUint32(SnapshotHandle snapshot, int elementIndex)
@@ -76,16 +68,20 @@ namespace MemorySnapshotPool
     [Pure]
     private static int HashPart(uint value, int elementIndex)
     {
-      var shiftAmount = (elementIndex * 2) % 32;
+      var prime = HashHelpers.NthPrime(elementIndex + 42);
 
-      var a = value << shiftAmount;
-      var b = value >> (32 - shiftAmount);
+      return (int) value * prime;
 
-      return (int) (a | b);
+      //var shiftAmount = (elementIndex * 2) % 32;
+      //
+      //var a = value << shiftAmount;
+      //var b = value >> (32 - shiftAmount);
+      //
+      //return (int) (a | b);
     }
 
     [MustUseReturnValue]
-    public SnapshotHandle SetUInt32(SnapshotHandle snapshot, int elementIndex, uint valueToSet)
+    public SnapshotHandle SetSingleUInt32(SnapshotHandle snapshot, int elementIndex, uint valueToSet)
     {
       Debug.Assert(elementIndex >= 0);
       Debug.Assert(elementIndex < myIntsPerSnapshotWithoutHash);
@@ -192,11 +188,9 @@ namespace MemorySnapshotPool
       myStorage.Copy(snapshot, SharedSnapshot);
     }
 
-    [NotNull, MustUseReturnValue]
-    public uint[] SharedSnapshotToArray(SnapshotHandle snapshot)
+    [NotNull, Pure]
+    public uint[] SnapshotToDebugArray(SnapshotHandle snapshot)
     {
-      CopyToSharedSnapshot(snapshot);
-
       var array = new uint[myIntsPerSnapshotWithoutHash];
       for (var index = 0; index < myIntsPerSnapshotWithoutHash; index++)
       {
@@ -219,7 +213,7 @@ namespace MemorySnapshotPool
     }
 
     [MustUseReturnValue]
-    public SnapshotHandle GetOrAppendSharedSnapshot()
+    public SnapshotHandle SetSharedSnapshot()
     {
       SnapshotHandle existingHandle;
       var sharedArrayExternalKey = new SharedSnapshotExternalKey(this);

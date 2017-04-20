@@ -20,6 +20,7 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -48,6 +49,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ExternalKeysHashSet.cs" />
+    <Compile Include="ISnapshotStorage.cs" />
     <Compile Include="ManagedSnapshotStorage.cs" />
     <Compile Include="Tests\ExternalKeysHashSetTests.cs" />
     <Compile Include="Program.cs" />
@@ -55,6 +57,7 @@
     <Compile Include="SnapshotHandle.cs" />
     <Compile Include="Tests\SnapshotPoolTests.cs" />
     <Compile Include="SnapshotPool.cs" />
+    <Compile Include="UnmanagedSnapshotStorage.cs" />
     <Content Include="ToDo.txt" />
   </ItemGroup>
   <ItemGroup>
