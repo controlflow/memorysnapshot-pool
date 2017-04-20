@@ -3,16 +3,16 @@ using JetBrains.Annotations;
 
 namespace MemorySnapshotPool
 {
-  public struct ManagedSnapshotStorage
+  public struct ManagedSnapshotStorage : ISnapshotStorage
   {
     private readonly int myIntsPerSnapshot;
     private uint[] myPoolArray;
     private int myLastUsedHandle;
 
-    public ManagedSnapshotStorage(int intsPerSnapshot)
+    public ManagedSnapshotStorage(int intsPerSnapshot, int capacity)
     {
       myIntsPerSnapshot = intsPerSnapshot;
-      myPoolArray = new uint[intsPerSnapshot * 100];
+      myPoolArray = new uint[intsPerSnapshot * capacity];
       myLastUsedHandle = 2; // shared + zero
     }
 
@@ -22,20 +22,17 @@ namespace MemorySnapshotPool
     }
 
     [Pure]
-    public uint[] GetArray(SnapshotHandle snapshot, out int shift)
+    private uint[] GetArray(SnapshotHandle snapshot, out int offset)
     {
-      shift = snapshot.Handle * myIntsPerSnapshot;
+      offset = snapshot.Handle * myIntsPerSnapshot;
       return myPoolArray;
     }
 
-    [Pure]
     public uint GetUint32(SnapshotHandle snapshot, int elementIndex)
     {
-      var offset = snapshot.Handle * myIntsPerSnapshot;
-      return myPoolArray[offset + elementIndex];
+      return myPoolArray[snapshot.Handle * myIntsPerSnapshot + elementIndex];
     }
 
-    [Pure]
     public bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, int startIndex, int endIndex)
     {
       int offset1, offset2;
@@ -70,11 +67,10 @@ namespace MemorySnapshotPool
       myPoolArray[offset + elementIndex] = value;
     }
 
-    [MustUseReturnValue]
     public SnapshotHandle AllocNewHandle()
     {
-      var lastIndex = (myLastUsedHandle + 1) * myIntsPerSnapshot;
-      if (lastIndex > myPoolArray.Length)
+      var offset = (myLastUsedHandle + 1) * myIntsPerSnapshot;
+      if (offset > myPoolArray.Length)
       {
         Array.Resize(ref myPoolArray, myPoolArray.Length * 2);
       }
