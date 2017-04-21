@@ -1,4 +1,11 @@
 ﻿SnapshotPool
+* How fast hashing is? switch for lookup
+* Trivial case: data itself fits into SnapshotHandle
+* Can reuse storage+hashes for {1,2,3,4} bytes, {5,6,7,8} bytes, etc
+* HashSet can store liveness bit in entires
+  * Storage allocation can reuse 
+* Implement common "memory store" with limits
+* Support memory limits
 * Parametrize with "storage system"
   * Managed array implementation
     * LOH protection?

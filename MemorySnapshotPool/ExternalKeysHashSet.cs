@@ -113,7 +113,7 @@ namespace MemorySnapshotPool
     {
       if (myBuckets == null) Initialize(0);
 
-      var hashCode = externalKey.HashCode() & 0x7FFFFFFF;
+      var hashCode = (int) externalKey.HashCode() & 0x7FFFFFFF;
       var targetBucket = hashCode % myBuckets.Length;
       var hashCollision = false;
 
@@ -206,7 +206,7 @@ namespace MemorySnapshotPool
     public interface IExteralKey
     {
       [Pure] bool Equals(TKeyHandle candidateHandle);
-      [Pure] int HashCode();
+      [Pure] uint HashCode();
     }
   }
 
@@ -240,13 +240,6 @@ namespace MemorySnapshotPool
     }
 
     private const int HashPrime = 101;
-
-    public static int NthPrime(int n)
-    {
-      // todo: compile to switch
-
-      return ourPrimes[n];
-    }
 
     public static int GetPrime(int min)
     {

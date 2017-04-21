@@ -4,13 +4,13 @@ namespace MemorySnapshotPool
 {
   public interface ISnapshotStorage
   {
-    int MemoryConsumptionTotalInBytes { get; }
+    uint MemoryConsumptionTotalInBytes { get; }
 
-    [Pure] uint GetUint32(SnapshotHandle snapshot, int elementIndex);
-    [Pure] bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, int startIndex, int endIndex);
+    [Pure] uint GetUint32(SnapshotHandle snapshot, uint elementIndex);
+    [Pure] bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, uint startIndex, uint endIndex);
 
     void Copy(SnapshotHandle sourceSnapshot, SnapshotHandle targetSnapshot);
-    void MutateUint32(SnapshotHandle snapshot, int elementIndex, uint value);
+    void MutateUint32(SnapshotHandle snapshot, uint elementIndex, uint value);
 
     [MustUseReturnValue] SnapshotHandle AllocNewHandle();
   }

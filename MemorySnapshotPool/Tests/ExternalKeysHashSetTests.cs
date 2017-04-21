@@ -75,9 +75,9 @@ namespace MemorySnapshotPool.Tests
         return EqualityComparer<T>.Default.Equals(myArray[candidateHandle], myArray[myIndex]);
       }
 
-      public int HashCode()
+      public uint HashCode()
       {
-        return myArray[myIndex].GetHashCode();
+        return (uint) myArray[myIndex].GetHashCode();
       }
     }
 
@@ -107,7 +107,7 @@ namespace MemorySnapshotPool.Tests
         return EqualityComparer<T>.Default.Equals(myArray[candidateHandle], myArray[myIndex]);
       }
 
-      public int HashCode() { return 42; }
+      public uint HashCode() { return 42; }
     }
 
     [Test]

@@ -9,14 +9,14 @@ namespace MemorySnapshotPool
 
   public unsafe struct UnmanagedSnapshotStorage : ISnapshotStorage
   {
-    private readonly int myIntsPerSnapshot;
-    private int myCurrentCapacity;
-    private int myLastUsedHandle;
+    private readonly uint myIntsPerSnapshot;
+    private uint myCurrentCapacity;
+    private uint myLastUsedHandle;
 
     [NotNull] private readonly UnmanagedMemoryHandle myMemoryHandle;
     private uint* myMemory;
 
-    public UnmanagedSnapshotStorage(int intsPerSnapshot, int capacity)
+    public UnmanagedSnapshotStorage(uint intsPerSnapshot, uint capacity)
     {
       myIntsPerSnapshot = intsPerSnapshot;
       myCurrentCapacity = intsPerSnapshot * capacity;
@@ -28,17 +28,17 @@ namespace MemorySnapshotPool
       ZeroMemory(myMemory, myIntsPerSnapshot * 2);
     }
 
-    public int MemoryConsumptionTotalInBytes
+    public uint MemoryConsumptionTotalInBytes
     {
       get { return myCurrentCapacity * sizeof(uint); }
     }
 
-    public uint GetUint32(SnapshotHandle snapshot, int elementIndex)
+    public uint GetUint32(SnapshotHandle snapshot, uint elementIndex)
     {
       return myMemory[snapshot.Handle * myIntsPerSnapshot + elementIndex];
     }
 
-    public bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, int startIndex, int endIndex)
+    public bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, uint startIndex, uint endIndex)
     {
       var ptr1 = myMemory + snapshot1.Handle * myIntsPerSnapshot;
       var ptr2 = myMemory + snapshot2.Handle * myIntsPerSnapshot;
@@ -62,7 +62,7 @@ namespace MemorySnapshotPool
       }
     }
 
-    public void MutateUint32(SnapshotHandle snapshot, int elementIndex, uint value)
+    public void MutateUint32(SnapshotHandle snapshot, uint elementIndex, uint value)
     {
       myMemory[snapshot.Handle * myIntsPerSnapshot + elementIndex] = value;
     }
@@ -79,7 +79,7 @@ namespace MemorySnapshotPool
       return new SnapshotHandle(myLastUsedHandle++);
     }
 
-    private static void ZeroMemory(uint* ptr, int count)
+    private static void ZeroMemory(uint* ptr, uint count)
     {
       for (var index = 0; index < count; index++)
       {
@@ -89,12 +89,14 @@ namespace MemorySnapshotPool
 
     private sealed class UnmanagedMemoryHandle : SafeHandleZeroOrMinusOneIsInvalid
     {
-      public UnmanagedMemoryHandle(int numberOfBytes) : base(ownsHandle: true)
+      public UnmanagedMemoryHandle(uint numberOfBytes) : base(ownsHandle: true)
       {
-        SetHandle(Marshal.AllocHGlobal(cb: numberOfBytes));
+        // todo: can return -1 if too big?
+
+        SetHandle(Marshal.AllocHGlobal(cb: (int) numberOfBytes));
       }
 
-      public uint* Resize(int numberOfBytes)
+      public uint* Resize(uint numberOfBytes)
       {
         handle = Marshal.ReAllocHGlobal(handle, (IntPtr) numberOfBytes);
         return (uint*) handle;

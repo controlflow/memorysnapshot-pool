@@ -5,37 +5,37 @@ namespace MemorySnapshotPool
 {
   public struct ManagedSnapshotStorage : ISnapshotStorage
   {
-    private readonly int myIntsPerSnapshot;
+    private readonly uint myIntsPerSnapshot;
     private uint[] myPoolArray;
-    private int myLastUsedHandle;
+    private uint myLastUsedHandle;
 
-    public ManagedSnapshotStorage(int intsPerSnapshot, int capacity)
+    public ManagedSnapshotStorage(uint intsPerSnapshot, uint capacity)
     {
       myIntsPerSnapshot = intsPerSnapshot;
       myPoolArray = new uint[intsPerSnapshot * capacity];
       myLastUsedHandle = 2; // shared + zero
     }
 
-    public int MemoryConsumptionTotalInBytes
+    public uint MemoryConsumptionTotalInBytes
     {
-      get { return myPoolArray.Length * sizeof(uint); }
+      get { return (uint) (myPoolArray.Length * sizeof(uint)); }
     }
 
     [Pure]
-    private uint[] GetArray(SnapshotHandle snapshot, out int offset)
+    private uint[] GetArray(SnapshotHandle snapshot, out uint offset)
     {
       offset = snapshot.Handle * myIntsPerSnapshot;
       return myPoolArray;
     }
 
-    public uint GetUint32(SnapshotHandle snapshot, int elementIndex)
+    public uint GetUint32(SnapshotHandle snapshot, uint elementIndex)
     {
       return myPoolArray[snapshot.Handle * myIntsPerSnapshot + elementIndex];
     }
 
-    public bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, int startIndex, int endIndex)
+    public bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, uint startIndex, uint endIndex)
     {
-      int offset1, offset2;
+      uint offset1, offset2;
       var array1 = GetArray(snapshot1, out offset1);
       var array2 = GetArray(snapshot2, out offset2);
 
@@ -49,7 +49,7 @@ namespace MemorySnapshotPool
 
     public void Copy(SnapshotHandle sourceSnapshot, SnapshotHandle targetSnapshot)
     {
-      int sourceOffset, targetOffset;
+      uint sourceOffset, targetOffset;
       var sourceArray = GetArray(sourceSnapshot, out sourceOffset);
       var targetArray = GetArray(targetSnapshot, out targetOffset);
 
@@ -61,7 +61,7 @@ namespace MemorySnapshotPool
         length: myIntsPerSnapshot);
     }
 
-    public void MutateUint32(SnapshotHandle snapshot, int elementIndex, uint value)
+    public void MutateUint32(SnapshotHandle snapshot, uint elementIndex, uint value)
     {
       var offset = snapshot.Handle * myIntsPerSnapshot;
       myPoolArray[offset + elementIndex] = value;

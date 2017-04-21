@@ -4,9 +4,9 @@ namespace MemorySnapshotPool
 {
   public struct SnapshotHandle : IEquatable<SnapshotHandle>
   {
-    public readonly int Handle;
+    public readonly uint Handle;
 
-    public SnapshotHandle(int handle)
+    public SnapshotHandle(uint handle)
     {
       Handle = handle;
     }
@@ -33,7 +33,7 @@ namespace MemorySnapshotPool
 
     public override int GetHashCode()
     {
-      return Handle;
+      return (int) Handle;
     }
 
     public override string ToString()

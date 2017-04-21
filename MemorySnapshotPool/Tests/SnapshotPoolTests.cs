@@ -22,7 +22,7 @@ namespace MemorySnapshotPool.Tests
       Assert.That(zeroArray, Is.All.Zero);
       Assert.AreEqual(zeroArray.Length, ElementsPerSnapshot);
 
-      for (var index = 0; index < ElementsPerSnapshot; index++)
+      for (var index = 0u; index < ElementsPerSnapshot; index++)
       {
         Assert.That(snapshotPool.GetUint32(zeroSnapshot, index), Is.Zero);
       }
@@ -33,7 +33,7 @@ namespace MemorySnapshotPool.Tests
       var modifiedHandle2 = snapshotPool.SetSingleUInt32(zeroSnapshot, 9, valueToSet: 0);
       Assert.AreEqual(zeroSnapshot, modifiedHandle2);
 
-      snapshotPool.CopyToSharedSnapshot(zeroSnapshot);
+      snapshotPool.LoadToSharedSnapshot(zeroSnapshot);
 
       var modifiedHandle3 = snapshotPool.StoreSharedSnapshot();
       Assert.AreEqual(zeroSnapshot, modifiedHandle3);
@@ -72,32 +72,89 @@ namespace MemorySnapshotPool.Tests
       var modifiedSnapshot3 = snapshotPool.SetSingleUInt32(modifiedSnapshot2, elementIndex: 5, valueToSet: 0);
       Assert.AreEqual(zeroSnapshot, modifiedSnapshot3);
 
-      snapshotPool.CopyToSharedSnapshot(zeroSnapshot);
+      snapshotPool.LoadToSharedSnapshot(zeroSnapshot);
       snapshotPool.SetSharedSnapshotUint32(elementIndex: 5, valueToSet: 42);
 
       var modifiedSnapshot4 = snapshotPool.StoreSharedSnapshot();
       Assert.AreEqual(modifiedSnapshot, modifiedSnapshot4);
     }
 
-    [Test]
-    public void PoolAllocationlessResize()
+    private class AllRowsGenerator
     {
-      var rows = (
-          from a in Enumerable.Range(0, 10)
-          from b in Enumerable.Range(0, 10)
-          from c in Enumerable.Range(0, 10)
-          from d in Enumerable.Range(0, 10)
-          select new[] {(uint) a, (uint) b, (uint) c, (uint) d}
-        ).ToList();
+      private readonly int myArraySize;
+      private readonly List<uint[]> myResults = new List<uint[]>();
+      private readonly uint[] myComponents;
+      private readonly uint[] myAlphabet;
+      private readonly int[] myPositions;
 
-      var snapshotPool = new SnapshotPool(bytesPerSnapshot: 4 * sizeof(uint), capacity: rows.Count);
+      public AllRowsGenerator(int countOfComponents, int arraySize)
+      {
+        var random = new Random();
+
+        if (countOfComponents > arraySize)
+        {
+          countOfComponents = arraySize;
+        }
+
+        myArraySize = arraySize;
+        myAlphabet = Enumerable.Repeat(countOfComponents, 10).Select(_ => (uint)random.Next()).ToArray();
+        myAlphabet[0] = 0; // needs to have 0
+        //myAlphabet = Enumerable.Range(0, 10).Select(_ => (uint) _).ToArray();
+        myPositions = Enumerable.Repeat(42, int.MaxValue).Select(_ => random.Next(0, arraySize)).Distinct().Take(countOfComponents).ToArray();
+        myComponents = new uint[countOfComponents];
+      }
+
+      public List<uint[]> Generate()
+      {
+        Generate(currentPosition: 0);
+
+        return myResults;
+      }
+
+      private void Generate(int currentPosition)
+      {
+        if (currentPosition < myComponents.Length)
+        {
+          foreach (var ch in myAlphabet)
+          {
+            myComponents[currentPosition] = ch;
+            Generate(currentPosition + 1);
+          }
+        }
+        else
+        {
+          var array = new uint[myArraySize];
+
+          for (var index = 0; index < myComponents.Length; index++)
+          {
+            array[myPositions[index]] = myComponents[index];
+          }
+
+          myResults.Add(array);
+        }
+      }
+    }
+
+    [Test]
+    [TestCase(1)]
+    [TestCase(2)]
+    [TestCase(3)]
+    [TestCase(4)]
+    [TestCase(5)]
+    [TestCase(10)]
+    public void PoolAllocationlessResize(int arraySize)
+    {
+      var generator = new AllRowsGenerator(4, arraySize);
+      var rows = generator.Generate();
+
+      var snapshotPool = new SnapshotPool(bytesPerSnapshot: (uint) arraySize * sizeof(uint), capacity: (uint) rows.Count);
       var handles = CreateHashSetWithCapacity(rows.Count);
 
       var totalMemoryBefore = GC.GetTotalMemory(false);
 
       foreach (var row in rows)
       {
-        for (var index = 0; index < row.Length; index++)
+        for (var index = 0u; index < row.Length; index++)
           snapshotPool.SetSharedSnapshotUint32(index, row[index]);
 
         var modifiedSnapshot = snapshotPool.StoreSharedSnapshot();
@@ -112,7 +169,7 @@ namespace MemorySnapshotPool.Tests
 
       foreach (var row in rows)
       {
-        for (var index = 0; index < row.Length; index++)
+        for (var index = 0u; index < row.Length; index++)
         {
           snapshot = snapshotPool.SetSingleUInt32(snapshot, index, row[index]);
           AllocationlessAssert(handles.Contains(snapshot));
@@ -135,7 +192,7 @@ namespace MemorySnapshotPool.Tests
     {
       var handles = new HashSet<SnapshotHandle>();
 
-      for (var index = 0; index < capacity; index++)
+      for (var index = 0u; index < capacity; index++)
         handles.Add(new SnapshotHandle(index));
 
       handles.Clear();
