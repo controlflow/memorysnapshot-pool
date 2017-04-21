@@ -139,9 +139,12 @@ namespace MemorySnapshotPool.Tests
     [TestCase(1)]
     [TestCase(2)]
     [TestCase(3)]
+    [TestCase(37)]
     [TestCase(4)]
     [TestCase(5)]
-    [TestCase(10)]
+    [TestCase(52)]
+    [TestCase(8)]
+    [TestCase(82)]
     public void PoolAllocationlessResize(int arraySize)
     {
       var generator = new AllRowsGenerator(4, arraySize);

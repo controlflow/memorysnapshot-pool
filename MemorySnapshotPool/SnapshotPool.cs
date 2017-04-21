@@ -10,22 +10,22 @@ namespace MemorySnapshotPool
     private readonly uint myIntsPerSnapshotWithoutHash;
 
     private ExternalKeysHashSet<SnapshotHandle> myExistingSnapshots;
-    private ManagedSnapshotStorage myStorage;
-    //private UnmanagedSnapshotStorage myStorage;
+    //private ManagedSnapshotStorage myStorage;
+    private UnmanagedSnapshotStorage myStorage;
     private uint myTrivialSharedSnapshotContent;
 
     public SnapshotPool(uint bytesPerSnapshot, uint capacity = 100)
     {
-      Debug.Assert(bytesPerSnapshot <= 84, "bytesPerSnapshot <= 84");
-
       var snapshotSize = sizeof(int) + bytesPerSnapshot;
       myIntsPerSnapshot = (snapshotSize / sizeof(uint)) + (snapshotSize % sizeof(uint) == 0 ? 0 : 1u);
       myIntsPerSnapshotWithoutHash = myIntsPerSnapshot - 1;
 
+      Debug.Assert(myIntsPerSnapshot <= 84, "myIntsPerSnapshot <= 84");
+
       if (bytesPerSnapshot > 4)
       {
-        //myStorage = new UnmanagedSnapshotStorage(myIntsPerSnapshot, capacity + 2);
-        myStorage = new ManagedSnapshotStorage(myIntsPerSnapshot, capacity + 2);
+        myStorage = new UnmanagedSnapshotStorage(myIntsPerSnapshot, capacity + 2);
+        //myStorage = new ManagedSnapshotStorage(myIntsPerSnapshot, capacity + 2);
 
         myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>((int)(capacity + 1));
         myExistingSnapshots.Add(ZeroSnapshot, new ZeroSnapshotExternalKey());

@@ -16,7 +16,7 @@ namespace MemorySnapshotPool
     private int[] myBuckets;
     private Entry[] myEntries;
     private int myCount;
-    private int mySameHashCount;
+    private int myCollisions;
     private int myFreeList;
     private int myFreeCount;
 
@@ -33,9 +33,9 @@ namespace MemorySnapshotPool
       get { return myCount - myFreeCount; }
     }
 
-    public int SameHashCount
+    public int Collisions
     {
-      get { return mySameHashCount; }
+      get { return myCollisions; }
     }
 
     public bool Add<TExteralKey>(TKeyHandle keyHandle, TExteralKey externalKey)
@@ -126,7 +126,7 @@ namespace MemorySnapshotPool
         if (externalKey.Equals(myEntries[index].KeyHandle)) return false;
       }
 
-      if (hashCollision) mySameHashCount++;
+      if (hashCollision) myCollisions++;
 
       int freeIndex;
       if (myFreeCount > 0)
