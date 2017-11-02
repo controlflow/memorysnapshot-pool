@@ -201,8 +201,6 @@ namespace MemorySnapshotPool
       return false;
     }
 
-    
-
     public interface IExteralKey
     {
       [Pure] bool Equals(TKeyHandle candidateHandle);

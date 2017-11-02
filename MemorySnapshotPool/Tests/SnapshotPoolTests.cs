@@ -79,6 +79,17 @@ namespace MemorySnapshotPool.Tests
       Assert.AreEqual(modifiedSnapshot, modifiedSnapshot4);
     }
 
+    [Test]
+    public void InlineStorage()
+    {
+      var snapshotPool = new SnapshotPool(bytesPerSnapshot: sizeof(uint));
+      Assert.AreEqual(snapshotPool.MemoryConsumptionPerSnapshotInBytes, 0);
+      Assert.AreEqual(snapshotPool.MemoryConsumptionTotalInBytes, 0);
+
+      Assert.AreEqual(0u, snapshotPool.GetUint32(SnapshotPool.ZeroSnapshot, 0));
+      Assert.AreEqual(0u, snapshotPool.GetUint32(SnapshotPool.SharedSnapshot, 0));
+    }
+
     private class AllRowsGenerator
     {
       private readonly int myArraySize;

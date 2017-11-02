@@ -18,7 +18,12 @@ namespace MemorySnapshotPool
 
     public uint MemoryConsumptionTotalInBytes
     {
-      get { return (uint) (myPoolArray.Length * sizeof(uint)); }
+      get
+      {
+        if (myPoolArray == null) return 0;
+
+        return (uint) (myPoolArray.Length * sizeof(uint));
+      }
     }
 
     [Pure]
@@ -67,7 +72,7 @@ namespace MemorySnapshotPool
       myPoolArray[offset + elementIndex] = value;
     }
 
-    public SnapshotHandle AllocNewHandle()
+    public SnapshotHandle AllocateNewHandle()
     {
       var offset = (myLastUsedHandle + 1) * myIntsPerSnapshot;
       if (offset > myPoolArray.Length)

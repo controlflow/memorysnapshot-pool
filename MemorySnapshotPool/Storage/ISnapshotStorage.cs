@@ -12,6 +12,6 @@ namespace MemorySnapshotPool
     void Copy(SnapshotHandle sourceSnapshot, SnapshotHandle targetSnapshot);
     void MutateUint32(SnapshotHandle snapshot, uint elementIndex, uint value);
 
-    [MustUseReturnValue] SnapshotHandle AllocNewHandle();
+    [MustUseReturnValue] SnapshotHandle AllocateNewHandle();
   }
 }

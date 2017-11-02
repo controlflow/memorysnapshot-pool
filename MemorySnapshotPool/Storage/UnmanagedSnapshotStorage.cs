@@ -67,7 +67,7 @@ namespace MemorySnapshotPool
       myMemory[snapshot.Handle * myIntsPerSnapshot + elementIndex] = value;
     }
 
-    public SnapshotHandle AllocNewHandle()
+    public SnapshotHandle AllocateNewHandle()
     {
       var offset = (myLastUsedHandle + 1) * myIntsPerSnapshot;
       if (offset > myCurrentCapacity)

@@ -10,8 +10,8 @@ namespace MemorySnapshotPool
     private readonly uint myIntsPerSnapshotWithoutHash;
 
     private ExternalKeysHashSet<SnapshotHandle> myExistingSnapshots;
-    //private ManagedSnapshotStorage myStorage;
-    private UnmanagedSnapshotStorage myStorage;
+    private ManagedSnapshotStorage myStorage;
+    //private UnmanagedSnapshotStorage myStorage;
     private uint myTrivialSharedSnapshotContent;
 
     public SnapshotPool(uint bytesPerSnapshot, uint capacity = 100)
@@ -24,8 +24,8 @@ namespace MemorySnapshotPool
 
       if (bytesPerSnapshot > 4)
       {
-        myStorage = new UnmanagedSnapshotStorage(myIntsPerSnapshot, capacity + 2);
-        //myStorage = new ManagedSnapshotStorage(myIntsPerSnapshot, capacity + 2);
+        //myStorage = new UnmanagedSnapshotStorage(myIntsPerSnapshot, capacity + 2);
+        myStorage = new ManagedSnapshotStorage(myIntsPerSnapshot, capacity + 2);
 
         myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>((int)(capacity + 1));
         myExistingSnapshots.Add(ZeroSnapshot, new ZeroSnapshotExternalKey());
@@ -34,13 +34,13 @@ namespace MemorySnapshotPool
 
     public uint MemoryConsumptionPerSnapshotInBytes
     {
-      // todo: ExternalKeysHashSet
+      // todo: add ExternalKeysHashSet
       get { return myIntsPerSnapshot / sizeof(uint); }
     }
 
     public uint MemoryConsumptionTotalInBytes
     {
-      // todo: ExternalKeysHashSet
+      // todo: add ExternalKeysHashSet
       get { return myStorage.MemoryConsumptionTotalInBytes; }
     }
 
@@ -57,8 +57,8 @@ namespace MemorySnapshotPool
       public uint HashCode() { return 0; }
     }
 
-    public static readonly SnapshotHandle SharedSnapshot = new SnapshotHandle(0);
-    public static readonly SnapshotHandle ZeroSnapshot = new SnapshotHandle(1);
+    public static readonly SnapshotHandle ZeroSnapshot = new SnapshotHandle(0);
+    public static readonly SnapshotHandle SharedSnapshot = new SnapshotHandle(1);
 
     [Pure]
     public uint GetUint32(SnapshotHandle snapshot, uint elementIndex)
@@ -67,7 +67,7 @@ namespace MemorySnapshotPool
 
       if (myIntsPerSnapshotWithoutHash == 1)
       {
-        return snapshot.Handle;
+        return snapshot == SharedSnapshot ? myTrivialSharedSnapshotContent : snapshot.Handle;
       }
 
       return myStorage.GetUint32(snapshot, elementIndex);
@@ -174,6 +174,12 @@ namespace MemorySnapshotPool
       }
     }
 
+    //[MustUseReturnValue]
+    //protected SnapshotHandle SetUnobservedUInt32(SnapshotHandle snapshot, uint elementIndex, uint valueToSet)
+    //{
+    //  
+    //}
+
     [MustUseReturnValue]
     public SnapshotHandle SetSingleUInt32(SnapshotHandle snapshot, uint elementIndex, uint valueToSet)
     {
@@ -269,7 +275,7 @@ namespace MemorySnapshotPool
       [MustUseReturnValue]
       public SnapshotHandle AllocateChanged()
       {
-        var newHandle = myPool.myStorage.AllocNewHandle();
+        var newHandle = myPool.myStorage.AllocateNewHandle();
 
         myPool.myStorage.Copy(mySourceSnapshot, newHandle);
         myPool.myStorage.MutateUint32(newHandle, myElementIndex, myValueToSet);
@@ -283,6 +289,8 @@ namespace MemorySnapshotPool
 
     public void LoadToSharedSnapshot(SnapshotHandle snapshot)
     {
+      Debug.Assert(snapshot != SharedSnapshot, "snapshot != SharedSnapshot");
+
       if (myIntsPerSnapshotWithoutHash == 1)
       {
         myTrivialSharedSnapshotContent = snapshot.Handle;
@@ -372,7 +380,7 @@ namespace MemorySnapshotPool
       [MustUseReturnValue]
       public SnapshotHandle AllocateChanged()
       {
-        var newHandle = myPool.myStorage.AllocNewHandle();
+        var newHandle = myPool.myStorage.AllocateNewHandle();
         myPool.myStorage.Copy(SharedSnapshot, newHandle);
         myPool.myExistingSnapshots.Add(newHandle, new ExistingPoolSnapshotExternalKey(myPool, newHandle));
 
