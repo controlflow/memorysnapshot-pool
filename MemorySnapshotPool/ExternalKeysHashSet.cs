@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 
 namespace MemorySnapshotPool
@@ -33,9 +34,25 @@ namespace MemorySnapshotPool
       get { return myCount - myFreeCount; }
     }
 
+    // todo: debug property?
     public int Collisions
     {
       get { return myCollisions; }
+    }
+
+    public uint BytesPerRecord
+    {
+      get { return (uint) (sizeof(int) * 3 + Marshal.SizeOf(typeof(TKeyHandle))); }
+    }
+
+    public uint TotalBytes
+    {
+      get
+      {
+        if (myEntries == null) return 0;
+
+        return (uint) myEntries.Length * BytesPerRecord;
+      }
     }
 
     public bool Add<TExteralKey>(TKeyHandle keyHandle, TExteralKey externalKey)

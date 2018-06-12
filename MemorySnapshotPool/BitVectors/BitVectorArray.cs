@@ -61,14 +61,14 @@ namespace MemorySnapshotPool
     }
 
     [Pure]
-    public bool SetBitAndClearOtherBits(int[] items, int typeIndex, out BitVectorArray result)
+    public bool SetBitAndClearOtherBits(int[] items, int bit, out BitVectorArray result)
     {
       result = this;
 
       var copied = false;
       foreach (var item in items)
       {
-        copied = copied | SetBitAndClearOtherBitsInternal(item, typeIndex, ref result, !copied);
+        copied = copied | SetBitAndClearOtherBitsInternal(item, bit, ref result, !copied);
       }
 
       return copied;

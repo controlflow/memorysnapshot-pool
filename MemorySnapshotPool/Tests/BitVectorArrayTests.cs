@@ -12,6 +12,7 @@ namespace MemorySnapshotPool.Tests
     private const uint N = 40;
     private const uint BITS_PER_ITEM = 38;
 
+    [Obsolete]
     private BitVectorArray myVectorArray;
 
     [Test]
@@ -62,6 +63,8 @@ namespace MemorySnapshotPool.Tests
       var setBits = new[] { new[] { 0u, 0u }, new[] { 1u, 4u } };
 
       var initialSnapshot = GivenBitVectorArrayWithSetBits(snapshotPool, setBits);
+
+      snapshotPool.SetBitAndClearOtherBits(initialSnapshot, 0, 5);
 
       //snapshotPool.SetSharedSnapshotBit(0, 5);
 

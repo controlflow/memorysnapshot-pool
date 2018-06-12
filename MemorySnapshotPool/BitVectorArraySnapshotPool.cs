@@ -170,5 +170,54 @@ namespace MemorySnapshotPool
 
       return SharedSnapshot;
     }
+
+    public void SetBitAndClearOtherBits(SnapshotHandle initialSnapshot, int i, int i1)
+    {
+      throw new NotImplementedException();
+    }
+
+    [Pure]
+    public bool SetBitAndClearOtherBits([NotNull] uint[] items, int typeIndex, out BitVectorArray result)
+    {
+      result = this;
+
+      var copied = false;
+      foreach (var item in items)
+      {
+        copied = copied | SetBitAndClearOtherBitsInternal(item, typeIndex, ref result, !copied);
+      }
+
+      return copied;
+    }
+
+    [Pure]
+    public bool SetBitAndClearOtherBits(int item, int bit, out BitVectorArray result)
+    {
+      result = this;
+      return SetBitAndClearOtherBitsInternal(item, bit, ref result, true);
+    }
+
+    public bool SetBitAndClearOtherBitsInternal(int item, int bit, ref BitVectorArray result, bool copyOnChange)
+    {
+      var index = item * myBitsPerItem + bit;
+      var mask = ((uint)1) << (index % VectorItemSize);
+      index = index / VectorItemSize;
+
+      if ((myVector[index] & mask) != 0)
+      {
+        myVector[index] &= ~mask;
+        var copied = Clear(item, ref result, true);
+        myVector[index] |= mask;
+        result.myVector[index] |= mask;
+        return copied;
+      }
+
+      if (copyOnChange)
+        result = new BitVectorArray(this);
+
+      Clear(item, ref result, false);
+      result.myVector[index] |= mask;
+      return copyOnChange;
+    }
   }
 }

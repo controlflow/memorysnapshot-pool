@@ -34,14 +34,17 @@ namespace MemorySnapshotPool
 
     public uint MemoryConsumptionPerSnapshotInBytes
     {
-      // todo: add ExternalKeysHashSet
-      get { return myIntsPerSnapshot / sizeof(uint); }
+      get
+      {
+        if (myIntsPerSnapshotWithoutHash == 1) return 0;
+
+        return myIntsPerSnapshot * sizeof(uint) + myExistingSnapshots.BytesPerRecord;
+      }
     }
 
     public uint MemoryConsumptionTotalInBytes
     {
-      // todo: add ExternalKeysHashSet
-      get { return myStorage.MemoryConsumptionTotalInBytes; }
+      get { return myStorage.MemoryConsumptionTotalInBytes + myExistingSnapshots.TotalBytes; }
     }
 
     // todo: snapshots count
