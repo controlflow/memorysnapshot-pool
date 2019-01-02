@@ -87,7 +87,7 @@ namespace MemorySnapshotPool.Tests
       Assert.AreEqual(snapshotPool.MemoryConsumptionTotalInBytes, 0);
 
       Assert.AreEqual(0u, snapshotPool.GetUint32(SnapshotPool.ZeroSnapshot, 0));
-      Assert.AreEqual(0u, snapshotPool.GetUint32(SnapshotPool.SharedSnapshot, 0));
+      Assert.AreEqual(0u, snapshotPool.GetSharedSnapshotUint32(0));
     }
 
     private class AllRowsGenerator
@@ -164,6 +164,8 @@ namespace MemorySnapshotPool.Tests
       var snapshotPool = new SnapshotPool(bytesPerSnapshot: (uint) arraySize * sizeof(uint), capacity: (uint) rows.Count);
       var handles = CreateHashSetWithCapacity(rows.Count);
 
+      snapshotPool.LoadToSharedSnapshot(SnapshotPool.ZeroSnapshot);
+      
       var totalMemoryBefore = GC.GetTotalMemory(false);
 
       foreach (var row in rows)
@@ -194,7 +196,7 @@ namespace MemorySnapshotPool.Tests
       AllocationlessAssert(totalMemoryBefore == totalMemoryAfter2);
     }
 
-    [SuppressMessage("ReSharper", "UnusedParameter.Local")]
+    [SuppressMessage("ReSharper", "ParameterOnlyUsedForPreconditionCheck.Local")]
     private static void AllocationlessAssert(bool condition)
     {
       if (!condition)

@@ -1,19 +1,17 @@
 using System;
 using JetBrains.Annotations;
 
-namespace MemorySnapshotPool
+namespace MemorySnapshotPool.Storage
 {
   public struct ManagedSnapshotStorage : ISnapshotStorage
   {
-    private readonly uint myIntsPerSnapshot;
     private uint[] myPoolArray;
-    private uint myLastUsedHandle;
+    private uint myLastUsedOffset;
 
-    public ManagedSnapshotStorage(uint intsPerSnapshot, uint capacity)
+    public ManagedSnapshotStorage(uint capacityInInts)
     {
-      myIntsPerSnapshot = intsPerSnapshot;
-      myPoolArray = new uint[intsPerSnapshot * capacity];
-      myLastUsedHandle = 2; // shared + zero
+      myPoolArray = new uint[capacityInInts];
+      myLastUsedOffset = 2; // shared + zero
     }
 
     public uint MemoryConsumptionTotalInBytes
@@ -29,20 +27,19 @@ namespace MemorySnapshotPool
     [Pure]
     private uint[] GetArray(SnapshotHandle snapshot, out uint offset)
     {
-      offset = snapshot.Handle * myIntsPerSnapshot;
+      offset = snapshot.Handle;
       return myPoolArray;
     }
 
     public uint GetUint32(SnapshotHandle snapshot, uint elementIndex)
     {
-      return myPoolArray[snapshot.Handle * myIntsPerSnapshot + elementIndex];
+      return myPoolArray[snapshot.Handle + elementIndex];
     }
 
     public bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, uint startIndex, uint endIndex)
     {
-      uint offset1, offset2;
-      var array1 = GetArray(snapshot1, out offset1);
-      var array2 = GetArray(snapshot2, out offset2);
+      var array1 = GetArray(snapshot1, out var offset1);
+      var array2 = GetArray(snapshot2, out var offset2);
 
       for (var index = startIndex; index < endIndex; index++)
       {
@@ -52,35 +49,36 @@ namespace MemorySnapshotPool
       return true;
     }
 
-    public void Copy(SnapshotHandle sourceSnapshot, SnapshotHandle targetSnapshot)
+    public void Copy(SnapshotHandle sourceSnapshot, SnapshotHandle targetSnapshot, uint intsToCopy)
     {
-      uint sourceOffset, targetOffset;
-      var sourceArray = GetArray(sourceSnapshot, out sourceOffset);
-      var targetArray = GetArray(targetSnapshot, out targetOffset);
+      var sourceArray = GetArray(sourceSnapshot, out var sourceOffset);
+      var targetArray = GetArray(targetSnapshot, out var targetOffset);
 
       Array.Copy(
         sourceArray: sourceArray,
         sourceIndex: sourceOffset,
         destinationArray: targetArray,
         destinationIndex: targetOffset,
-        length: myIntsPerSnapshot);
+        length: intsToCopy);
     }
 
     public void MutateUint32(SnapshotHandle snapshot, uint elementIndex, uint value)
     {
-      var offset = snapshot.Handle * myIntsPerSnapshot;
-      myPoolArray[offset + elementIndex] = value;
+      myPoolArray[snapshot.Handle + elementIndex] = value;
     }
 
-    public SnapshotHandle AllocateNewHandle()
+    public SnapshotHandle AllocateNewHandle(uint intsToAllocate)
     {
-      var offset = (myLastUsedHandle + 1) * myIntsPerSnapshot;
-      if (offset > myPoolArray.Length)
+      var lastOffsetUsed = myLastUsedOffset;
+      
+      var newLastOffset = lastOffsetUsed + intsToAllocate;
+      if (newLastOffset > myPoolArray.Length)
       {
         Array.Resize(ref myPoolArray, myPoolArray.Length * 2);
       }
 
-      return new SnapshotHandle(myLastUsedHandle++);
+      myLastUsedOffset = newLastOffset;
+      return new SnapshotHandle(lastOffsetUsed);
     }
   }
 }

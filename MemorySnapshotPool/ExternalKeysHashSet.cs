@@ -29,21 +29,12 @@ namespace MemorySnapshotPool
       }
     }
 
-    public int Count
-    {
-      get { return myCount - myFreeCount; }
-    }
+    public int Count => myCount - myFreeCount;
 
     // todo: debug property?
-    public int Collisions
-    {
-      get { return myCollisions; }
-    }
+    public int Collisions => myCollisions;
 
-    public uint BytesPerRecord
-    {
-      get { return (uint) (sizeof(int) * 3 + Marshal.SizeOf(typeof(TKeyHandle))); }
-    }
+    public uint BytesPerRecord => (uint) (sizeof(int) * 3 + Marshal.SizeOf(typeof(TKeyHandle)));
 
     public uint TotalBytes
     {
@@ -55,8 +46,8 @@ namespace MemorySnapshotPool
       }
     }
 
-    public bool Add<TExteralKey>(TKeyHandle keyHandle, TExteralKey externalKey)
-      where TExteralKey : struct, IExteralKey
+    public bool Add<TExternalKey>(TKeyHandle keyHandle, TExternalKey externalKey)
+      where TExternalKey : struct, IExternalKey
     {
       return Insert(keyHandle, externalKey);
     }
@@ -86,16 +77,16 @@ namespace MemorySnapshotPool
     }
 
     [Pure]
-    public bool Contains<TExteralKey>(TExteralKey externalKey)
-      where TExteralKey : struct, IExteralKey
+    public bool Contains<TExternalKey>(TExternalKey externalKey)
+      where TExternalKey : struct, IExternalKey
     {
       var index = FindEntry(externalKey);
       return index >= 0;
     }
 
     [Pure]
-    private int FindEntry<TExteralKey>(TExteralKey externalKey)
-      where TExteralKey : struct, IExteralKey
+    private int FindEntry<TExternalKey>(TExternalKey externalKey)
+      where TExternalKey : struct, IExternalKey
     {
       if (myBuckets != null)
       {
@@ -126,7 +117,7 @@ namespace MemorySnapshotPool
     }
 
     private bool Insert<TExternalKey>(TKeyHandle keyHandle, TExternalKey externalKey)
-      where TExternalKey : struct, IExteralKey
+      where TExternalKey : struct, IExternalKey
     {
       if (myBuckets == null) Initialize(0);
 
@@ -205,7 +196,7 @@ namespace MemorySnapshotPool
 
     [Pure]
     public bool TryGetKey<TExternalKey>(TExternalKey externalKey, out TKeyHandle keyHandle)
-      where TExternalKey : struct, IExteralKey
+      where TExternalKey : struct, IExternalKey
     {
       var index = FindEntry(externalKey);
       if (index >= 0)
@@ -218,7 +209,7 @@ namespace MemorySnapshotPool
       return false;
     }
 
-    public interface IExteralKey
+    public interface IExternalKey
     {
       [Pure] bool Equals(TKeyHandle candidateHandle);
       [Pure] uint HashCode();
@@ -237,7 +228,7 @@ namespace MemorySnapshotPool
     };
 
     [Pure]
-    public static bool IsPrime(int candidate)
+    private static bool IsPrime(int candidate)
     {
       if ((candidate & 1) != 0)
       {

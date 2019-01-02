@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using JetBrains.Annotations;
+// ReSharper disable UnusedParameter.Local
 
 namespace MemorySnapshotPool
 {
@@ -27,8 +28,8 @@ namespace MemorySnapshotPool
       return (arrayLength * bitsPerItem - 1) / 8 + 1;
     }
 
-    public uint ArrayLength { get { return myArrayLength; } }
-    public uint BitsPerItem { get { return myBitsPerItem; } }
+    public uint ArrayLength => myArrayLength;
+    public uint BitsPerItem => myBitsPerItem;
 
     [Pure]
     public bool GetBit(SnapshotHandle snapshot, uint index, uint bit)
@@ -65,7 +66,7 @@ namespace MemorySnapshotPool
       var bitIndex = index * myBitsPerItem + bit;
       var mask = 1u << (int)(bitIndex % VectorItemSize);
 
-      var vectorItem = GetUint32(SharedSnapshot, bitIndex / VectorItemSize);
+      var vectorItem = GetSharedSnapshotUint32(bitIndex / VectorItemSize);
       if ((vectorItem & mask) != 0) return;
 
       SetSharedSnapshotUint32(bitIndex / VectorItemSize, vectorItem | mask);
@@ -83,9 +84,6 @@ namespace MemorySnapshotPool
         currentSnapshot = Clear(currentSnapshot, index, useSharedSnapshotToModifyAndLeaveItThere: true);
       }
 
-      if (currentSnapshot == SharedSnapshot)
-        return StoreSharedSnapshot();
-
       return currentSnapshot;
     }
 
@@ -95,14 +93,13 @@ namespace MemorySnapshotPool
       Debug.Assert(index < myArrayLength, "index < myArrayLength");
 
       var resultingSnapshot = Clear(snapshot, index, useSharedSnapshotToModifyAndLeaveItThere: false);
-      if (resultingSnapshot == SharedSnapshot)
-        return StoreSharedSnapshot();
 
       return resultingSnapshot;
     }
 
     private SnapshotHandle Clear(SnapshotHandle snapshot, uint index, bool useSharedSnapshotToModifyAndLeaveItThere)
     {
+      /*
       var firstBitIndex = index * myBitsPerItem;
       var firstIndex = firstBitIndex / VectorItemSize;
       var lastIndex = (firstBitIndex + myBitsPerItem - 1) / VectorItemSize;
@@ -151,12 +148,11 @@ namespace MemorySnapshotPool
         return SetSingleUInt32(snapshot, firstIndex, single & ~maskForFirstElement & ~maskForLastElement);
       }
 
-      if (snapshot != SharedSnapshot)
-        LoadToSharedSnapshot(snapshot);
+      LoadToSharedSnapshot(snapshot);
 
       if (firstIndex < lastIndex)
       {
-        var first = GetUint32(SharedSnapshot, firstIndex);
+        var first = GetSharedSnapshotUint32(firstIndex);
         SetSharedSnapshotUint32(firstIndex, first & ~maskForFirstElement);
       }
 
@@ -165,10 +161,12 @@ namespace MemorySnapshotPool
         SetSharedSnapshotUint32(i, 0u);
       }
 
-      var last = GetUint32(SharedSnapshot, lastIndex);
+      var last = GetSharedSnapshotUint32(lastIndex);
       SetSharedSnapshotUint32(lastIndex, last & ~maskForLastElement);
 
       return SharedSnapshot;
+      */
+      return default;
     }
 
     public void SetBitAndClearOtherBits(SnapshotHandle initialSnapshot, int i, int i1)
@@ -176,6 +174,7 @@ namespace MemorySnapshotPool
       throw new NotImplementedException();
     }
 
+    /*
     [Pure]
     public bool SetBitAndClearOtherBits([NotNull] uint[] items, int typeIndex, out BitVectorArray result)
     {
@@ -219,5 +218,6 @@ namespace MemorySnapshotPool
       result.myVector[index] |= mask;
       return copyOnChange;
     }
+    */
   }
 }

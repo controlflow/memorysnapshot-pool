@@ -19,7 +19,7 @@ namespace MemorySnapshotPool.Tests
     }
 
     private static void BasicTestScenario<TExternalKey>(TExternalKey firstKey, TExternalKey secondKey)
-      where TExternalKey : struct, ExternalKeysHashSet<int>.IExteralKey
+      where TExternalKey : struct, ExternalKeysHashSet<int>.IExternalKey
     {
       var hashSet = new ExternalKeysHashSet<int>(capacity: 0);
       Assert.AreEqual(0, hashSet.Count);
@@ -59,7 +59,7 @@ namespace MemorySnapshotPool.Tests
       Assert.AreEqual(0, hashSet.Count);
     }
 
-    private struct ArrayElementExternalKey<T> : ExternalKeysHashSet<int>.IExteralKey
+    private struct ArrayElementExternalKey<T> : ExternalKeysHashSet<int>.IExternalKey
     {
       [NotNull] private readonly T[] myArray;
       private readonly int myIndex;
@@ -91,7 +91,7 @@ namespace MemorySnapshotPool.Tests
         secondKey: new CollidingHashArrayElementExternalKey<string>(array, index: 1));
     }
 
-    private struct CollidingHashArrayElementExternalKey<T> : ExternalKeysHashSet<int>.IExteralKey
+    private struct CollidingHashArrayElementExternalKey<T> : ExternalKeysHashSet<int>.IExternalKey
     {
       [NotNull] private readonly T[] myArray;
       private readonly int myIndex;

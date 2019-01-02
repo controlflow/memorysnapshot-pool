@@ -2,7 +2,7 @@ using System;
 
 namespace MemorySnapshotPool
 {
-  public struct SnapshotHandle : IEquatable<SnapshotHandle>
+  public readonly struct SnapshotHandle : IEquatable<SnapshotHandle>
   {
     public readonly uint Handle;
 
@@ -11,34 +11,15 @@ namespace MemorySnapshotPool
       Handle = handle;
     }
 
-    public static bool operator ==(SnapshotHandle left, SnapshotHandle right)
-    {
-      return left.Equals(right);
-    }
+    public static bool operator ==(SnapshotHandle left, SnapshotHandle right) => left.Equals(right);
+    public static bool operator !=(SnapshotHandle left, SnapshotHandle right) => !left.Equals(right);
 
-    public static bool operator !=(SnapshotHandle left, SnapshotHandle right)
-    {
-      return !left.Equals(right);
-    }
+    public bool Equals(SnapshotHandle other) => Handle == other.Handle;
 
-    public bool Equals(SnapshotHandle other)
-    {
-      return Handle == other.Handle;
-    }
+    public override bool Equals(object obj) => throw new InvalidOperationException();
 
-    public override bool Equals(object obj)
-    {
-      throw new InvalidOperationException();
-    }
+    public override int GetHashCode() => (int) Handle;
 
-    public override int GetHashCode()
-    {
-      return (int) Handle;
-    }
-
-    public override string ToString()
-    {
-      return Handle.ToString();
-    }
+    public override string ToString() => Handle.ToString();
   }
 }

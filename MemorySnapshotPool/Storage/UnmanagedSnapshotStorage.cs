@@ -3,45 +3,39 @@ using System.Runtime.InteropServices;
 using JetBrains.Annotations;
 using Microsoft.Win32.SafeHandles;
 
-namespace MemorySnapshotPool
+namespace MemorySnapshotPool.Storage
 {
   // todo: can work over pinned managed array as well
 
   public unsafe struct UnmanagedSnapshotStorage : ISnapshotStorage
   {
-    private readonly uint myIntsPerSnapshot;
     private uint myCurrentCapacity;
-    private uint myLastUsedHandle;
+    private uint myLastUsedOffset;
 
     [NotNull] private readonly UnmanagedMemoryHandle myMemoryHandle;
     private uint* myMemory;
 
-    public UnmanagedSnapshotStorage(uint intsPerSnapshot, uint capacity)
+    public UnmanagedSnapshotStorage(uint capacityInInts)
     {
-      myIntsPerSnapshot = intsPerSnapshot;
-      myCurrentCapacity = intsPerSnapshot * capacity;
+      myCurrentCapacity = capacityInInts;
 
       myMemoryHandle = new UnmanagedMemoryHandle(numberOfBytes: myCurrentCapacity * sizeof(uint));
       myMemory = (uint*) myMemoryHandle.DangerousGetHandle();
 
-      myLastUsedHandle = 2; // shared + zero
-      ZeroMemory(myMemory, myIntsPerSnapshot * 2);
+      myLastUsedOffset = 0;
     }
 
-    public uint MemoryConsumptionTotalInBytes
-    {
-      get { return myCurrentCapacity * sizeof(uint); }
-    }
+    public uint MemoryConsumptionTotalInBytes => myCurrentCapacity * sizeof(uint);
 
     public uint GetUint32(SnapshotHandle snapshot, uint elementIndex)
     {
-      return myMemory[snapshot.Handle * myIntsPerSnapshot + elementIndex];
+      return myMemory[snapshot.Handle + elementIndex];
     }
 
     public bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, uint startIndex, uint endIndex)
     {
-      var ptr1 = myMemory + snapshot1.Handle * myIntsPerSnapshot;
-      var ptr2 = myMemory + snapshot2.Handle * myIntsPerSnapshot;
+      var ptr1 = myMemory + snapshot1.Handle;
+      var ptr2 = myMemory + snapshot2.Handle;
 
       for (var index = startIndex; index < endIndex; index++)
       {
@@ -51,12 +45,12 @@ namespace MemorySnapshotPool
       return true;
     }
 
-    public void Copy(SnapshotHandle sourceSnapshot, SnapshotHandle targetSnapshot)
+    public void Copy(SnapshotHandle sourceSnapshot, SnapshotHandle targetSnapshot, uint intsToCopy)
     {
-      var sourcePtr = myMemory + sourceSnapshot.Handle * myIntsPerSnapshot;
-      var targetPtr = myMemory + targetSnapshot.Handle * myIntsPerSnapshot;
+      var sourcePtr = myMemory + sourceSnapshot.Handle;
+      var targetPtr = myMemory + targetSnapshot.Handle;
 
-      for (var index = 0; index < myIntsPerSnapshot; index++)
+      for (var index = 0; index < intsToCopy; index++)
       {
         targetPtr[index] = sourcePtr[index];
       }
@@ -64,27 +58,22 @@ namespace MemorySnapshotPool
 
     public void MutateUint32(SnapshotHandle snapshot, uint elementIndex, uint value)
     {
-      myMemory[snapshot.Handle * myIntsPerSnapshot + elementIndex] = value;
+      myMemory[snapshot.Handle + elementIndex] = value;
     }
 
-    public SnapshotHandle AllocateNewHandle()
+    public SnapshotHandle AllocateNewHandle(uint intsToAllocate)
     {
-      var offset = (myLastUsedHandle + 1) * myIntsPerSnapshot;
-      if (offset > myCurrentCapacity)
+      var lastOffsetUsed = myLastUsedOffset;
+      
+      var newLastOffset = lastOffsetUsed + intsToAllocate;
+      if (newLastOffset > myCurrentCapacity)
       {
         myCurrentCapacity *= 2;
         myMemory = myMemoryHandle.Resize(myCurrentCapacity * sizeof(uint));
       }
 
-      return new SnapshotHandle(myLastUsedHandle++);
-    }
-
-    private static void ZeroMemory(uint* ptr, uint count)
-    {
-      for (var index = 0; index < count; index++)
-      {
-        ptr[index] = 0;
-      }
+      myLastUsedOffset = newLastOffset;
+      return new SnapshotHandle(lastOffsetUsed);
     }
 
     private sealed class UnmanagedMemoryHandle : SafeHandleZeroOrMinusOneIsInvalid

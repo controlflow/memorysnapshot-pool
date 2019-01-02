@@ -1,11 +1,8 @@
-﻿using System;
-using System.Diagnostics;
-
-namespace MemorySnapshotPool
+﻿namespace MemorySnapshotPool
 {
-  public class Program
+  public static class Program
   {
-    private static void Main(string[] args)
+    private static void Main()
     {
       
     }
