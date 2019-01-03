@@ -49,14 +49,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BitVectorArraySnapshotPool.cs" />
-    <Compile Include="BitVectors\BitVector64.cs" />
-    <Compile Include="BitVectors\BitVectorArray.cs" />
     <Compile Include="ExternalKeysHashSet.cs" />
     <Compile Include="Storage\ISnapshotStorage.cs" />
     <Compile Include="Storage\ManagedSnapshotStorage.cs" />
-    <Compile Include="Tests\BitVector64Test.cs" />
-    <Compile Include="Tests\BitVectorArrayTests.cs" />
     <Compile Include="Tests\ExternalKeysHashSetTests.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
