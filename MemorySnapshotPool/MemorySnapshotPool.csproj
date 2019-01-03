@@ -60,6 +60,7 @@
     <Compile Include="Tests\SnapshotPoolTests.cs" />
     <Compile Include="SnapshotPool.cs" />
     <Compile Include="Storage\UnmanagedSnapshotStorage.cs" />
+    <Compile Include="View\SnapshotPoolByteView.cs" />
     <Content Include="ToDo.txt" />
   </ItemGroup>
   <ItemGroup>

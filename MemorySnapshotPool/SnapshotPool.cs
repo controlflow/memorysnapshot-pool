@@ -1,6 +1,6 @@
-﻿using System;
+﻿#define VERIFY_POOL_USAGE
+using System;
 using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using JetBrains.Annotations;
 using MemorySnapshotPool.Storage;
 
@@ -23,6 +23,7 @@ namespace MemorySnapshotPool
     private readonly uint myIntsPerSnapshotWithoutHash;
 
     private const uint VariableSizeSnapshot = uint.MaxValue;
+    private const uint BytesOfVariableSnapshotHandleCanStoreInline = 3;
 
     private int mySharedSnapshotSize = -1;
     private SnapshotHandle mySharedSnapshot;
@@ -33,12 +34,12 @@ namespace MemorySnapshotPool
       
       if (bytesPerSnapshot != null)
       {
-        if (bytesPerSnapshot > 84)
-          throw new ArgumentOutOfRangeException(message: "Too many elements per snapshot", null);
-        
         var snapshotSize = sizeof(uint) + bytesPerSnapshot.Value;
         myIntsPerSnapshotWithHash = (snapshotSize / sizeof(uint)) + (snapshotSize % sizeof(uint) == 0 ? 0 : 1u);
-        myIntsPerSnapshotWithoutHash = myIntsPerSnapshotWithHash - 1;  
+        myIntsPerSnapshotWithoutHash = myIntsPerSnapshotWithHash - 1;
+        
+        if (myIntsPerSnapshotWithoutHash > 84)
+          throw new ArgumentOutOfRangeException(message: "Too many elements per snapshot", null);
       }
       else
       { 
@@ -64,6 +65,13 @@ namespace MemorySnapshotPool
           myStorage.MutateUint32(zero, index, value: 0);
         }
       }
+    }
+
+    [Conditional("VERIFY_POOL_USAGE")]
+    private static void Assert(bool condition, string message)
+    {
+      if (!condition)
+        throw new ArgumentException(message);
     }
 
     public uint MemoryConsumptionPerSnapshotInBytes
@@ -95,16 +103,16 @@ namespace MemorySnapshotPool
       {
         case 1:
         {
-          Debug.Assert(elementIndex == 0);
+          Assert(elementIndex == 0, "Element index is out of range");
           return snapshot.Handle; // inline content
         }
 
         case VariableSizeSnapshot:
         {
           var sizeInBytes = snapshot.SnapshotSizeInBytes;
-          Debug.Assert(elementIndex * 4 < sizeInBytes);
+          Assert(elementIndex * 4 < sizeInBytes, "Element index is out of range");
           
-          if (sizeInBytes < 3) // inline content
+          if (sizeInBytes <= BytesOfVariableSnapshotHandleCanStoreInline) // inline content
             return snapshot.SnapshotHandleWithoutSize;
 
           return myStorage.GetUint32(snapshot, elementIndex);
@@ -112,6 +120,8 @@ namespace MemorySnapshotPool
 
         default:
         {
+          Assert(elementIndex < myIntsPerSnapshotWithoutHash, "Element index is out of range");
+
           return myStorage.GetUint32(snapshot, elementIndex);
         }
       }
@@ -222,11 +232,32 @@ namespace MemorySnapshotPool
     [MustUseReturnValue]
     public SnapshotHandle SetSingleUInt32(SnapshotHandle snapshot, uint elementIndex, uint valueToSet)
     {
-      Debug.Assert(elementIndex < myIntsPerSnapshotWithoutHash);
-
-      if (myIntsPerSnapshotWithoutHash == 1)
+      switch (myIntsPerSnapshotWithoutHash)
       {
-        return new SnapshotHandle(valueToSet);
+        case 1:
+        {
+          Assert(elementIndex == 0, "Element index is out of range");
+          return new SnapshotHandle(valueToSet);
+        }
+
+        case VariableSizeSnapshot:
+        {
+          var sizeInBytes = snapshot.SnapshotSizeInBytes;
+          Assert(elementIndex * 4 < sizeInBytes, "Element index is out of range");
+
+          valueToSet &= ~(uint.MaxValue << (int)(sizeInBytes % 4) * 8); // trim value
+
+          if (sizeInBytes <= BytesOfVariableSnapshotHandleCanStoreInline) // inline content
+            return new SnapshotHandle(valueToSet, sizeInBytes);
+
+          break;
+        }
+
+        default:
+        {
+          Assert(elementIndex < myIntsPerSnapshotWithoutHash, "Element index is out of range");
+          break;
+        }
       }
 
       var existingValue = myStorage.GetUint32(snapshot, elementIndex);
@@ -262,10 +293,7 @@ namespace MemorySnapshotPool
         myPool = pool;
       }
 
-      public bool Equals(SnapshotHandle candidateSnapshot)
-      {
-        return candidateSnapshot == mySnapshot;
-      }
+      public bool Equals(SnapshotHandle candidateSnapshot) => candidateSnapshot == mySnapshot;
 
       public uint HashCode()
       {
@@ -323,6 +351,40 @@ namespace MemorySnapshotPool
       }
     }
 
+    [MustUseReturnValue]
+    public SnapshotHandle AppendBytesToSnapshot(
+      SnapshotHandle snapshot, uint bytesToAdd, uint maskToBeAppliedToFirstOfAppendedUint32Elements = 0)
+    {
+      Assert(myIntsPerSnapshotWithoutHash == VariableSizeSnapshot,
+        "Should only be invoked for variable-size snapshot pools");
+
+      var newSizeInBytes = snapshot.SnapshotSizeInBytes + bytesToAdd;
+      if (newSizeInBytes <= snapshot.SnapshotCapacityInBytes)
+      {
+        if (maskToBeAppliedToFirstOfAppendedUint32Elements == 0)
+        {
+          // this works both for inline content and allocated snapshots,
+          // since we guarantee memory in the end to be zeroed
+          return new SnapshotHandle(snapshot.SnapshotHandleWithoutSize, newSizeInBytes);
+        }
+
+        if (newSizeInBytes <= BytesOfVariableSnapshotHandleCanStoreInline)
+        {
+          return new SnapshotHandle(
+            snapshot.SnapshotHandleWithoutSize | maskToBeAppliedToFirstOfAppendedUint32Elements,
+            newSizeInBytes); 
+        }
+
+        var lastUint32Element = GetUint32(snapshot, newSizeInBytes / 4);
+        return SetSingleUInt32(
+          snapshot, newSizeInBytes / 4, lastUint32Element | maskToBeAppliedToFirstOfAppendedUint32Elements);
+      }
+      
+      // need to extend 
+
+      throw null;
+    }
+    
     private void AllocateSharedSnapshot(uint snapshotSize)
     {
       switch (mySharedSnapshotSize)
