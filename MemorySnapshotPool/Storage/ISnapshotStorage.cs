@@ -8,7 +8,7 @@ namespace MemorySnapshotPool.Storage
     
     uint MemoryConsumptionTotalInBytes { get; }
 
-    [Pure] uint GetUint32(SnapshotHandle snapshot, uint elementIndex);
+    [Pure] uint GetUint32(uint offset, uint index);
     
     [Pure] bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, uint startIndex, uint endIndex);
 

@@ -30,9 +30,9 @@ namespace MemorySnapshotPool.Storage
 
     public uint MemoryConsumptionTotalInBytes => myCurrentCapacity * sizeof(uint);
 
-    public uint GetUint32(SnapshotHandle snapshot, uint elementIndex)
+    public uint GetUint32(uint offset, uint index)
     {
-      return myMemory[snapshot.Handle + elementIndex];
+      return myMemory[offset + index];
     }
 
     public bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, uint startIndex, uint endIndex)

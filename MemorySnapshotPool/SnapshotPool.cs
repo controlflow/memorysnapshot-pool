@@ -49,7 +49,7 @@ namespace MemorySnapshotPool
 
       if (bytesPerSnapshot > 4)
       {
-        myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>((int)(capacity + 1));
+        myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>((int) (capacity + 1));
         myExistingSnapshots.Add(SnapshotHandle.Zero, new ZeroSnapshotExternalKey());
 
         const uint specialSnapshotsCount = 2;
@@ -64,6 +64,11 @@ namespace MemorySnapshotPool
         {
           myStorage.MutateUint32(zero, index, value: 0);
         }
+      }
+      else if (bytesPerSnapshot == null)
+      {
+        myExistingSnapshots = new ExternalKeysHashSet<SnapshotHandle>((int) capacity);
+        myStorage.Initialize(capacity);
       }
     }
 
@@ -89,7 +94,7 @@ namespace MemorySnapshotPool
     // todo: snapshots count
     // todo: fill ratio
 
-    private struct ZeroSnapshotExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExternalKey
+    private readonly struct ZeroSnapshotExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExternalKey
     {
       public bool Equals(SnapshotHandle candidateSnapshot) => throw new InvalidOperationException();
 
@@ -111,18 +116,18 @@ namespace MemorySnapshotPool
         {
           var sizeInBytes = snapshot.SnapshotSizeInBytes;
           Assert(elementIndex * 4 < sizeInBytes, "Element index is out of range");
-          
+
           if (sizeInBytes <= BytesOfVariableSnapshotHandleCanStoreInline) // inline content
             return snapshot.SnapshotHandleWithoutSize;
 
-          return myStorage.GetUint32(snapshot, elementIndex);
+          return myStorage.GetUint32(snapshot.SnapshotHandleWithoutSize, elementIndex);
         }
 
         default:
         {
           Assert(elementIndex < myIntsPerSnapshotWithoutHash, "Element index is out of range");
 
-          return myStorage.GetUint32(snapshot, elementIndex);
+          return myStorage.GetUint32(snapshot.Handle, elementIndex);
         }
       }
     }
@@ -232,6 +237,8 @@ namespace MemorySnapshotPool
     [MustUseReturnValue]
     public SnapshotHandle SetSingleUInt32(SnapshotHandle snapshot, uint elementIndex, uint valueToSet)
     {
+      uint sourceOffset;
+
       switch (myIntsPerSnapshotWithoutHash)
       {
         case 1:
@@ -246,6 +253,7 @@ namespace MemorySnapshotPool
           Assert(elementIndex * 4 < sizeInBytes, "Element index is out of range");
 
           valueToSet &= ~(uint.MaxValue << (int)(sizeInBytes % 4) * 8); // trim value
+          sourceOffset = snapshot.SnapshotHandleWithoutSize;
 
           if (sizeInBytes <= BytesOfVariableSnapshotHandleCanStoreInline) // inline content
             return new SnapshotHandle(valueToSet, sizeInBytes);
@@ -256,17 +264,21 @@ namespace MemorySnapshotPool
         default:
         {
           Assert(elementIndex < myIntsPerSnapshotWithoutHash, "Element index is out of range");
+
+          sourceOffset = snapshot.Handle;
           break;
         }
       }
 
-      var existingValue = myStorage.GetUint32(snapshot, elementIndex);
+      var existingValue = myStorage.GetUint32(sourceOffset, elementIndex);
       if (existingValue == valueToSet)
       {
         return snapshot; // the same value
       }
 
-      var currentHash = myStorage.GetUint32(snapshot, myIntsPerSnapshotWithoutHash);
+      // todo: 4 byte snapshots
+
+      var currentHash = myStorage.GetUint32(sourceOffset, myIntsPerSnapshotWithoutHash);
 
       var hashWithoutElement = currentHash ^ HashPart(existingValue, elementIndex);
       var newHash = hashWithoutElement ^ HashPart(valueToSet, elementIndex);
@@ -278,27 +290,32 @@ namespace MemorySnapshotPool
       {
         return existingHandle;
       }
+      
+      var newHandle = myStorage.AllocateNewHandle(myIntsPerSnapshotWithHash);
 
-      return withOneValueChanged.AllocateChanged();
+      myStorage.Copy(snapshot, newHandle, myIntsPerSnapshotWithHash);
+      myStorage.MutateUint32(newHandle, elementIndex, valueToSet);
+      myStorage.MutateUint32(newHandle, myIntsPerSnapshotWithoutHash, newHash);
+
+      myExistingSnapshots.Add(newHandle, new TrivialExternalKey(newHandle, newHash));
+
+      return newHandle;
     }
 
-    private readonly struct ExistingPoolSnapshotExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExternalKey
+    private readonly struct TrivialExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExternalKey
     {
-      [NotNull] private readonly SnapshotPool<TSnapshotStorage> myPool;
       private readonly SnapshotHandle mySnapshot;
+      private readonly uint myNewHash;
 
-      public ExistingPoolSnapshotExternalKey([NotNull] SnapshotPool<TSnapshotStorage> pool, SnapshotHandle snapshot)
+      public TrivialExternalKey(SnapshotHandle snapshot, uint newHash)
       {
         mySnapshot = snapshot;
-        myPool = pool;
+        myNewHash = newHash;
       }
 
       public bool Equals(SnapshotHandle candidateSnapshot) => candidateSnapshot == mySnapshot;
 
-      public uint HashCode()
-      {
-        return myPool.myStorage.GetUint32(mySnapshot, myPool.myIntsPerSnapshotWithoutHash);
-      }
+      public uint HashCode() => myNewHash;
     }
 
     private readonly struct ExistingPoolSnapshotWithOneValueChangedExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExternalKey
@@ -325,7 +342,7 @@ namespace MemorySnapshotPool
         if (!storage.CompareRange(mySourceSnapshot, candidateSnapshot,
                                   startIndex: 0, endIndex: myElementIndex)) return false;
 
-        if (storage.GetUint32(candidateSnapshot, myElementIndex) != myValueToSet) return false;
+        if (storage.GetUint32(candidateSnapshot.Handle, myElementIndex) != myValueToSet) return false;
 
         if (!storage.CompareRange(mySourceSnapshot, candidateSnapshot,
                                   startIndex: myElementIndex + 1,
@@ -335,20 +352,6 @@ namespace MemorySnapshotPool
       }
 
       public uint HashCode() => myNewHash;
-
-      [MustUseReturnValue]
-      public SnapshotHandle AllocateChanged()
-      {
-        var newHandle = myPool.myStorage.AllocateNewHandle(myPool.myIntsPerSnapshotWithHash);
-
-        myPool.myStorage.Copy(mySourceSnapshot, newHandle, myPool.myIntsPerSnapshotWithHash);
-        myPool.myStorage.MutateUint32(newHandle, myElementIndex, myValueToSet);
-        myPool.myStorage.MutateUint32(newHandle, myPool.myIntsPerSnapshotWithoutHash, myNewHash);
-
-        myPool.myExistingSnapshots.Add(newHandle, new ExistingPoolSnapshotExternalKey(myPool, newHandle));
-
-        return newHandle;
-      }
     }
 
     [MustUseReturnValue]
@@ -359,30 +362,69 @@ namespace MemorySnapshotPool
         "Should only be invoked for variable-size snapshot pools");
 
       var newSizeInBytes = snapshot.SnapshotSizeInBytes + bytesToAdd;
+      if (newSizeInBytes <= BytesOfVariableSnapshotHandleCanStoreInline)
+      {
+        return new SnapshotHandle(
+          snapshot.SnapshotHandleWithoutSize | maskToBeAppliedToFirstOfAppendedUint32Elements, newSizeInBytes);
+      }
+      
       if (newSizeInBytes <= snapshot.SnapshotCapacityInBytes)
       {
         if (maskToBeAppliedToFirstOfAppendedUint32Elements == 0)
         {
-          // this works both for inline content and allocated snapshots,
-          // since we guarantee memory in the end to be zeroed
+          // this works for allocated snapshots, since we guarantee memory in the end to be zeroed
           return new SnapshotHandle(snapshot.SnapshotHandleWithoutSize, newSizeInBytes);
         }
 
-        if (newSizeInBytes <= BytesOfVariableSnapshotHandleCanStoreInline)
-        {
-          return new SnapshotHandle(
-            snapshot.SnapshotHandleWithoutSize | maskToBeAppliedToFirstOfAppendedUint32Elements,
-            newSizeInBytes); 
-        }
-
-        var lastUint32Element = GetUint32(snapshot, newSizeInBytes / 4);
-        return SetSingleUInt32(
-          snapshot, newSizeInBytes / 4, lastUint32Element | maskToBeAppliedToFirstOfAppendedUint32Elements);
+        // todo: test this
+        var tailElementIndex = (snapshot.SnapshotSizeInBytes + 1) / 4;
+        var lastUint32Element = GetUint32(snapshot, tailElementIndex);
+        return SetSingleUInt32(snapshot, tailElementIndex,
+          valueToSet: lastUint32Element | maskToBeAppliedToFirstOfAppendedUint32Elements);
       }
+
+      if (newSizeInBytes == 4)
+      {
+        var newValue = snapshot.SnapshotHandleWithoutSize | maskToBeAppliedToFirstOfAppendedUint32Elements;
+
+        var singleIntExternalKey = new SingleIntExternalKey(this, newValue);
+        if (myExistingSnapshots.TryGetKey(singleIntExternalKey, out var existingHandle))
+          return existingHandle;
+
+        var newHandle = myStorage.AllocateNewHandle(1);
+        myStorage.MutateUint32(newHandle, elementIndex: 0, newValue);
+
+        var newHandleWithSize = new SnapshotHandle(newHandle.Handle, newSizeInBytes);
+        myExistingSnapshots.Add(newHandleWithSize, new TrivialExternalKey(newHandleWithSize, newHash: newValue));
+        return newHandleWithSize;
+      }
+
       
-      // need to extend 
+      
+
+      
 
       throw null;
+    }
+
+    private readonly struct SingleIntExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExternalKey
+    {
+      [NotNull] private readonly SnapshotPool<TSnapshotStorage> myPool;
+      private readonly uint myValue;
+
+      public SingleIntExternalKey([NotNull] SnapshotPool<TSnapshotStorage> pool, uint value)
+      {
+        myPool = pool;
+        myValue = value;
+      }
+      
+      public bool Equals(SnapshotHandle candidateHandle)
+      {
+        var value = myPool.myStorage.GetUint32(candidateHandle.SnapshotHandleWithoutSize, index: 0);
+        return value == myValue;
+      }
+
+      public uint HashCode() => myValue; // neat
     }
     
     private void AllocateSharedSnapshot(uint snapshotSize)
@@ -417,15 +459,37 @@ namespace MemorySnapshotPool
     [NotNull, Pure]
     public uint[] SnapshotToDebugArray(SnapshotHandle snapshot)
     {
-      if (myIntsPerSnapshotWithoutHash == 1)
+      uint elementsCount, offset;
+
+      switch (myIntsPerSnapshotWithoutHash)
       {
-        return new[] { snapshot.Handle };
+        case 1:
+          return new[] {snapshot.Handle};
+
+        case VariableSizeSnapshot:
+        {
+          var snapshotSizeInBytes = snapshot.SnapshotSizeInBytes;
+          if (snapshotSizeInBytes == 0)
+            return new uint[0];
+
+          if (snapshotSizeInBytes <= BytesOfVariableSnapshotHandleCanStoreInline)
+            return new[] {snapshot.SnapshotHandleWithoutSize};
+
+          elementsCount = snapshotSizeInBytes / 4;
+          offset = snapshot.SnapshotHandleWithoutSize;
+          break;
+        }
+
+        default:
+          elementsCount = myIntsPerSnapshotWithoutHash;
+          offset = snapshot.Handle;
+          break;
       }
 
-      var array = new uint[myIntsPerSnapshotWithoutHash];
-      for (var index = 0u; index < myIntsPerSnapshotWithoutHash; index++)
+      var array = new uint[elementsCount];
+      for (uint index = 0; index < elementsCount; index++)
       {
-        array[index] = myStorage.GetUint32(snapshot, index);
+        array[index] = myStorage.GetUint32(offset, index);
       }
 
       return array;
@@ -439,7 +503,7 @@ namespace MemorySnapshotPool
         return mySharedSnapshot.Handle;
       }
 
-      return myStorage.GetUint32(mySharedSnapshot, elementIndex);
+      return myStorage.GetUint32(mySharedSnapshot.Handle, elementIndex);
     }
 
     public void SetSharedSnapshotUint32(uint elementIndex, uint valueToSet)
@@ -455,8 +519,8 @@ namespace MemorySnapshotPool
       }
       else
       {
-        var existingValue = myStorage.GetUint32(mySharedSnapshot, elementIndex);
-        var sharedHash = myStorage.GetUint32(mySharedSnapshot, myIntsPerSnapshotWithoutHash);
+        var existingValue = myStorage.GetUint32(mySharedSnapshot.Handle, elementIndex);
+        var sharedHash = myStorage.GetUint32(mySharedSnapshot.Handle, myIntsPerSnapshotWithoutHash);
 
         var hashWithoutElement = sharedHash ^ HashPart(existingValue, elementIndex);
         var newHash = hashWithoutElement ^ HashPart(valueToSet, elementIndex);
@@ -480,15 +544,17 @@ namespace MemorySnapshotPool
       {
         return existingHandle;
       }
-      
+
       var newHandle = myStorage.AllocateNewHandle(myIntsPerSnapshotWithHash);
       myStorage.Copy(mySharedSnapshot, newHandle, myIntsPerSnapshotWithHash);
-      myExistingSnapshots.Add(newHandle, new ExistingPoolSnapshotExternalKey(this, newHandle));
+      var newHash = myStorage.GetUint32(newHandle.Handle, index: myIntsPerSnapshotWithoutHash);
+
+      myExistingSnapshots.Add(newHandle, new TrivialExternalKey(newHandle, newHash));
 
       return newHandle;
     }
 
-    private struct SharedSnapshotExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExternalKey
+    private readonly struct SharedSnapshotExternalKey : ExternalKeysHashSet<SnapshotHandle>.IExternalKey
     {
       [NotNull] private readonly SnapshotPool<TSnapshotStorage> myPool;
       private readonly SnapshotHandle mySharedSnapshot;
@@ -505,10 +571,7 @@ namespace MemorySnapshotPool
           candidateSnapshot, mySharedSnapshot, 0, myPool.myIntsPerSnapshotWithoutHash);
       }
 
-      public uint HashCode()
-      {
-        return myPool.myStorage.GetUint32(mySharedSnapshot, myPool.myIntsPerSnapshotWithoutHash);
-      }
+      public uint HashCode() => myPool.myStorage.GetUint32(mySharedSnapshot.Handle, myPool.myIntsPerSnapshotWithoutHash);
     }
   }
 }

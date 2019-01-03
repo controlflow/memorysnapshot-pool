@@ -34,9 +34,9 @@ namespace MemorySnapshotPool.Storage
       return myPoolArray;
     }
 
-    public uint GetUint32(SnapshotHandle snapshot, uint elementIndex)
+    public uint GetUint32(uint offset, uint index)
     {
-      return myPoolArray[snapshot.Handle + elementIndex];
+      return myPoolArray[offset + index];
     }
 
     public bool CompareRange(SnapshotHandle snapshot1, SnapshotHandle snapshot2, uint startIndex, uint endIndex)

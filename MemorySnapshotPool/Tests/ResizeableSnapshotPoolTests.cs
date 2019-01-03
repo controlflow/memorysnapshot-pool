@@ -11,31 +11,49 @@ namespace MemorySnapshotPool.Tests
     {
       var snapshotPool = new SnapshotPool(bytesPerSnapshot: null);
       var emptySnapshot = SnapshotHandle.Zero;
-      Assert.AreEqual(emptySnapshot.SnapshotSizeInBytes, 0);
+      Assert.AreEqual(0, emptySnapshot.SnapshotSizeInBytes);
+      Assert.AreEqual(new uint[0], snapshotPool.SnapshotToDebugArray(emptySnapshot));
 
       var oneByteSnapshot = snapshotPool.AppendBytesToSnapshot(emptySnapshot, bytesToAdd: 1);
       var value = snapshotPool.GetUint32(oneByteSnapshot, elementIndex: 0);
-      Assert.AreEqual(value, 0);
+      Assert.AreEqual(0, value);
       Assert.AreNotEqual(emptySnapshot, oneByteSnapshot);
       Assert.AreEqual(oneByteSnapshot.SnapshotSizeInBytes, 1);
+      Assert.AreEqual(new uint[] { 0 }, snapshotPool.SnapshotToDebugArray(oneByteSnapshot));
 
       var otherOneByte = snapshotPool.AppendBytesToSnapshot(emptySnapshot, bytesToAdd: 1);
       Assert.AreEqual(otherOneByte, oneByteSnapshot);
       
       var twoByteSnapshot = snapshotPool.AppendBytesToSnapshot(emptySnapshot, bytesToAdd: 2);
-      Assert.AreEqual(twoByteSnapshot.SnapshotSizeInBytes, 2);
+      Assert.AreEqual(2, twoByteSnapshot.SnapshotSizeInBytes);
       Assert.AreNotEqual(emptySnapshot, twoByteSnapshot);
       Assert.AreNotEqual(oneByteSnapshot, twoByteSnapshot);
       Assert.AreEqual(twoByteSnapshot, snapshotPool.AppendBytesToSnapshot(oneByteSnapshot, bytesToAdd: 1));
 
       var threeByteSnapshot = snapshotPool.AppendBytesToSnapshot(emptySnapshot, bytesToAdd: 3);
-      Assert.AreEqual(threeByteSnapshot.SnapshotSizeInBytes, 3);
+      Assert.AreEqual(3, threeByteSnapshot.SnapshotSizeInBytes);
       Assert.AreEqual(threeByteSnapshot, snapshotPool.AppendBytesToSnapshot(twoByteSnapshot, bytesToAdd: 1));
 
       var modifiedSnapshot = snapshotPool.SetSingleUInt32(threeByteSnapshot, elementIndex: 0, valueToSet: 0xABCDEF12);
       Assert.AreNotEqual(modifiedSnapshot, threeByteSnapshot);
       Assert.AreEqual(0xCDEF12, snapshotPool.GetUint32(modifiedSnapshot, elementIndex: 0));
-      
+      Assert.AreEqual(new uint[] { 0xCDEF12 }, snapshotPool.SnapshotToDebugArray(modifiedSnapshot));
+
+      var fourByteSnapshot = snapshotPool.AppendBytesToSnapshot(modifiedSnapshot, bytesToAdd: 1);
+      Assert.AreEqual(4, fourByteSnapshot.SnapshotSizeInBytes);
+      Assert.AreEqual(0xCDEF12, snapshotPool.GetUint32(fourByteSnapshot, elementIndex: 0));
+      Assert.AreEqual(new uint[] { 0xCDEF12 }, snapshotPool.SnapshotToDebugArray(fourByteSnapshot));
+
+      var otherFourBytes = snapshotPool.AppendBytesToSnapshot(
+        emptySnapshot, bytesToAdd: 4, maskToBeAppliedToFirstOfAppendedUint32Elements: 0xCDEF12);
+      Assert.AreEqual(fourByteSnapshot, otherFourBytes);
+
+      var oneMoreFourBytes = snapshotPool.AppendBytesToSnapshot(
+        snapshotPool.AppendBytesToSnapshot(
+          emptySnapshot, bytesToAdd: 2, maskToBeAppliedToFirstOfAppendedUint32Elements: 0xEF12),
+        bytesToAdd: 2, maskToBeAppliedToFirstOfAppendedUint32Elements: 0x00CD0000);
+      Assert.AreEqual(fourByteSnapshot, oneMoreFourBytes);
+
       // todo: append more
     }
 
@@ -70,7 +88,7 @@ namespace MemorySnapshotPool.Tests
 
       var snapshot3 = snapshotPool.AppendSingleByte(snapshot1, valueToAdd: 13);
       Assert.AreEqual(new byte[] { 12, 13 }, snapshotPool.SnapshotToDebugArray(snapshot3));
-      
+
       var snapshot4 = snapshotPool.AppendSingleByte(snapshot3, valueToAdd: 42);
       Assert.AreEqual(new byte[] { 12, 13, 42 }, snapshotPool.SnapshotToDebugArray(snapshot4));
     }
