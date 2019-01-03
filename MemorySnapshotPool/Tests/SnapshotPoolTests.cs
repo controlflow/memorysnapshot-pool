@@ -16,7 +16,7 @@ namespace MemorySnapshotPool.Tests
     public void ZeroModifications()
     {
       var snapshotPool = new SnapshotPool(bytesPerSnapshot: ElementsPerSnapshot * sizeof(uint));
-      var zeroSnapshot = SnapshotPool.ZeroSnapshot;
+      var zeroSnapshot = SnapshotHandle.Zero;
 
       var zeroArray = snapshotPool.SnapshotToDebugArray(zeroSnapshot);
       Assert.That(zeroArray, Is.All.Zero);
@@ -49,7 +49,7 @@ namespace MemorySnapshotPool.Tests
     public void ZeroBytes()
     {
       var snapshotPool = new SnapshotPool(bytesPerSnapshot: 0);
-      var zeroSnapshot = SnapshotPool.ZeroSnapshot;
+      var zeroSnapshot = SnapshotHandle.Zero;
 
       Assert.That(snapshotPool.SnapshotToDebugArray(zeroSnapshot), Is.Empty);
     }
@@ -58,7 +58,7 @@ namespace MemorySnapshotPool.Tests
     public void Intern()
     {
       var snapshotPool = new SnapshotPool(bytesPerSnapshot: ElementsPerSnapshot * sizeof(uint));
-      var zeroSnapshot = SnapshotPool.ZeroSnapshot;
+      var zeroSnapshot = SnapshotHandle.Zero;
 
       var modifiedSnapshot = snapshotPool.SetSingleUInt32(zeroSnapshot, elementIndex: 5, valueToSet: 42);
       Assert.AreNotEqual(zeroSnapshot, modifiedSnapshot);
@@ -86,7 +86,7 @@ namespace MemorySnapshotPool.Tests
       Assert.AreEqual(snapshotPool.MemoryConsumptionPerSnapshotInBytes, 0);
       Assert.AreEqual(snapshotPool.MemoryConsumptionTotalInBytes, 0);
 
-      Assert.AreEqual(0u, snapshotPool.GetUint32(SnapshotPool.ZeroSnapshot, 0));
+      Assert.AreEqual(0u, snapshotPool.GetUint32(SnapshotHandle.Zero, 0));
       Assert.AreEqual(0u, snapshotPool.GetSharedSnapshotUint32(0));
     }
 
@@ -164,7 +164,7 @@ namespace MemorySnapshotPool.Tests
       var snapshotPool = new SnapshotPool(bytesPerSnapshot: (uint) arraySize * sizeof(uint), capacity: (uint) rows.Count);
       var handles = CreateHashSetWithCapacity(rows.Count);
 
-      snapshotPool.LoadToSharedSnapshot(SnapshotPool.ZeroSnapshot);
+      snapshotPool.LoadToSharedSnapshot(SnapshotHandle.Zero);
       
       var totalMemoryBefore = GC.GetTotalMemory(false);
 
@@ -181,7 +181,7 @@ namespace MemorySnapshotPool.Tests
       AllocationlessAssert(totalMemoryBefore == totalMemoryAfter);
       AllocationlessAssert(rows.Count == handles.Count);
 
-      var snapshot = SnapshotPool.ZeroSnapshot;
+      var snapshot = SnapshotHandle.Zero;
 
       foreach (var row in rows)
       {

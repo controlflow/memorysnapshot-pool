@@ -56,6 +56,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SnapshotHandle.cs" />
+    <Compile Include="Tests\ResizeableSnapshotPoolTests.cs" />
     <Compile Include="Tests\SnapshotPoolTests.cs" />
     <Compile Include="SnapshotPool.cs" />
     <Compile Include="Storage\UnmanagedSnapshotStorage.cs" />

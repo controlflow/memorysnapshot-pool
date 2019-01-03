@@ -8,10 +8,13 @@ namespace MemorySnapshotPool.Storage
     private uint[] myPoolArray;
     private uint myLastUsedOffset;
 
-    public ManagedSnapshotStorage(uint capacityInInts)
+    public void Initialize(uint capacityInInts)
     {
+      if (myPoolArray != null)
+        throw new InvalidOperationException("Already initialized");
+      
       myPoolArray = new uint[capacityInInts];
-      myLastUsedOffset = 2; // shared + zero
+      myLastUsedOffset = 0;
     }
 
     public uint MemoryConsumptionTotalInBytes

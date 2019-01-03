@@ -12,11 +12,14 @@ namespace MemorySnapshotPool.Storage
     private uint myCurrentCapacity;
     private uint myLastUsedOffset;
 
-    [NotNull] private readonly UnmanagedMemoryHandle myMemoryHandle;
+    [NotNull] private UnmanagedMemoryHandle myMemoryHandle;
     private uint* myMemory;
 
-    public UnmanagedSnapshotStorage(uint capacityInInts)
+    public void Initialize(uint capacityInInts)
     {
+      if (myMemoryHandle == null)
+        throw new InvalidOperationException("Already initialized");
+      
       myCurrentCapacity = capacityInInts;
 
       myMemoryHandle = new UnmanagedMemoryHandle(numberOfBytes: myCurrentCapacity * sizeof(uint));

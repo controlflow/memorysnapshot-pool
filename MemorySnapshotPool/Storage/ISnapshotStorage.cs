@@ -4,6 +4,8 @@ namespace MemorySnapshotPool.Storage
 {
   public interface ISnapshotStorage
   {
+    void Initialize(uint capacityInInts);
+    
     uint MemoryConsumptionTotalInBytes { get; }
 
     [Pure] uint GetUint32(SnapshotHandle snapshot, uint elementIndex);

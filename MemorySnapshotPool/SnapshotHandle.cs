@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace MemorySnapshotPool
 {
@@ -11,6 +12,13 @@ namespace MemorySnapshotPool
       Handle = handle;
     }
 
+    private const uint SizeMask = 0xFF00_0000;
+    private const int SizeOffset = 24;
+
+    // only for variable-size snapshots
+    internal uint SnapshotSizeInBytes => (Handle & SizeMask) >> SizeOffset;
+    internal uint SnapshotHandleWithoutSize => Handle & ~SizeMask;
+
     public static bool operator ==(SnapshotHandle left, SnapshotHandle right) => left.Equals(right);
     public static bool operator !=(SnapshotHandle left, SnapshotHandle right) => !left.Equals(right);
 
@@ -21,5 +29,7 @@ namespace MemorySnapshotPool
     public override int GetHashCode() => (int) Handle;
 
     public override string ToString() => Handle.ToString();
+
+    public static readonly SnapshotHandle Zero = new SnapshotHandle(0);
   }
 }
